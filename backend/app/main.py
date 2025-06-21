@@ -144,7 +144,19 @@ async def track_click(data: Dict):
 
 @app.get("/heatmap/clicks")
 async def get_clicks():
-    return CLICK_STORE
+    # Only include clicks with valid numeric x and y values
+    valid_clicks = [
+        d for d in CLICK_STORE
+        if isinstance(d, dict)
+        and isinstance(d.get("x"), (int, float))
+        and isinstance(d.get("y"), (int, float))
+    ]
+
+    if not valid_clicks:
+        # Optional: Return an empty list or raise an error if no valid data
+        return []
+
+    return valid_clicks
 
 # ➕ Session replay tracking
 @app.post("/session")

@@ -6,6 +6,7 @@ const API_BASE = import.meta.env.VITE_API_BASE;
 export default function HeatmapViewer() {
   const heatmapRef = useRef(null);
   const [loading, setLoading] = useState(true);
+  const [hasValidPoints, setHasValidPoints] = useState(false);
 
   useEffect(() => {
     const container = heatmapRef.current;
@@ -29,16 +30,21 @@ export default function HeatmapViewer() {
       .then((clicks) => {
         if (!Array.isArray(clicks)) return;
 
-        const points = clicks.map((d) => ({
-          x: d.x,
-          y: d.y,
-          value: 1,
-        }));
+        const validPoints = clicks
+          .filter((d) => typeof d.x === "number" && typeof d.y === "number")
+          .map((d) => ({
+            x: d.x,
+            y: d.y,
+            value: 1,
+          }));
 
-        heatmapInstance.setData({
-          max: 5,
-          data: points,
-        });
+        if (validPoints.length > 0) {
+          heatmapInstance.setData({
+            max: 5,
+            data: validPoints,
+          });
+          setHasValidPoints(true);
+        }
 
         setLoading(false);
       })
@@ -62,6 +68,9 @@ export default function HeatmapViewer() {
         }}
       />
       {loading && <p className="text-cybergreen mt-4">Loading heatmap…</p>}
+      {!loading && !hasValidPoints && (
+        <p className="text-yellow-400 mt-4">No valid click coordinates found to render heatmap.</p>
+      )}
     </div>
   );
 }
