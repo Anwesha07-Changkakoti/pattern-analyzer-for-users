@@ -9,15 +9,19 @@ import AnomalyBar from "./AnomalyBar";
 import AnomalyLineChart from "./AnomalyLineChart";
 import AnomalyPie from "./AnomalyPie";
 import DataTable from "./DataTable";
+import HeatmapViewer from "./HeatmapViewer";
 import Home from "./Home";
 import LiveBarChart from "./LiveBarChart";
 import Login from "./Login";
 import Navbar from "./Navbar";
+import PathFlowChart from "./PathFlowChart";
 import ProtectedRoute from "./ProtectedRoute";
 import ResultsHistory from "./ResultsHistory";
+import SessionReplay from "./SessionReplay";
 import StatsCard from "./StatsCard";
 import Unauthorized from "./Unauthorized";
 import Upload from "./Upload";
+
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 const WS_BASE = import.meta.env.VITE_WS_BASE ?? "ws://localhost:8000";
@@ -284,6 +288,9 @@ export default function App() {
           }
         />
         <Route path="/unauthorized" element={<Unauthorized />} />
+        <Route path="/heatmap" element={<HeatmapViewer />} />
+        <Route path="/replay" element={<SessionReplay />} />
+        <Route path="/flow" element={<PathFlowChart />} />
       </Routes>
     </div>
   );
