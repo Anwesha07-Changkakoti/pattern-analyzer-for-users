@@ -25,6 +25,7 @@ export default function HeatmapViewer() {
           maxOpacity: 0.6,
           minOpacity: 0,
           blur: 0.85,
+          useCanvasExt: true, // ✅ Important: Use safer canvas rendering
         });
 
         heatmapInstance.setData({
