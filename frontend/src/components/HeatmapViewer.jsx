@@ -1,49 +1,35 @@
-import h337 from "heatmap.js";
+// src/components/HeatmapViewer.jsx
+
 import { useEffect, useRef, useState } from "react";
+import simpleheat from "simpleheat";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 export default function HeatmapViewer() {
-  const heatmapRef = useRef(null);
+  const canvasRef = useRef(null);
   const [loading, setLoading] = useState(true);
-  const [hasValidPoints, setHasValidPoints] = useState(false);
+  const [hasData, setHasData] = useState(false);
 
   useEffect(() => {
-    const container = heatmapRef.current;
-    if (!container) return;
-
-    const heatmapInstance = h337.create({
-      container,
-      radius: 40,
-      maxOpacity: 0.6,
-      minOpacity: 0,
-      blur: 0.9,
-      gradient: {
-        0.2: "#00ff00",
-        0.5: "#ffff00",
-        0.9: "#ff0000",
-      },
-    });
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
     fetch(`${API_BASE}/heatmap/clicks`)
       .then((res) => res.json())
       .then((clicks) => {
         if (!Array.isArray(clicks)) return;
 
-        const validPoints = clicks
+        const points = clicks
           .filter((d) => typeof d.x === "number" && typeof d.y === "number")
-          .map((d) => ({
-            x: d.x,
-            y: d.y,
-            value: 1,
-          }));
+          .map((d) => [d.x, d.y, 1]); // simpleheat expects [x, y, value]
 
-        if (validPoints.length > 0) {
-          heatmapInstance.setData({
-            max: 5,
-            data: validPoints,
-          });
-          setHasValidPoints(true);
+        if (points.length > 0) {
+          const heat = simpleheat(canvas);
+          heat.data(points);
+          heat.max(5);
+          heat.radius(40, 15); // (radius, blur)
+          heat.draw();
+          setHasData(true);
         }
 
         setLoading(false);
@@ -57,19 +43,19 @@ export default function HeatmapViewer() {
   return (
     <div className="p-6">
       <h2 className="text-xl font-bold text-cybergreen mb-4">Click Heatmap</h2>
-      <div
-        ref={heatmapRef}
+      <canvas
+        ref={canvasRef}
+        width={window.innerWidth - 100}
+        height={600}
         style={{
-          width: "100%",
-          height: "600px",
-          position: "relative",
+          display: "block",
           background: "#111",
-          overflow: "hidden",
+          border: "1px solid #444",
         }}
       />
       {loading && <p className="text-cybergreen mt-4">Loading heatmap…</p>}
-      {!loading && !hasValidPoints && (
-        <p className="text-yellow-400 mt-4">No valid click coordinates found to render heatmap.</p>
+      {!loading && !hasData && (
+        <p className="text-yellow-400 mt-4">No valid click data to render heatmap.</p>
       )}
     </div>
   );
