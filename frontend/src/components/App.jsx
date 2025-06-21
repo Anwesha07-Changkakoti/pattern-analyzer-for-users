@@ -22,7 +22,6 @@ import StatsCard from "./StatsCard";
 import Unauthorized from "./Unauthorized";
 import Upload from "./Upload";
 
-
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 const WS_BASE = import.meta.env.VITE_WS_BASE ?? "ws://localhost:8000";
 const WS_PATH = "/ws/stream";
@@ -38,8 +37,11 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [fileId, setFileId] = useState(null);
 
-  // --- 🔥 1. Click Tracker (Heatmap)
+  // ✅ 1. Click Tracker (Heatmap) — only on selected pages
   useEffect(() => {
+    const allowedPaths = ["/", "/heatmap", "/history"];
+    if (!allowedPaths.includes(location.pathname) || !user) return;
+
     const handleClick = (e) => {
       fetch(`${API_BASE}/clicks`, {
         method: "POST",
@@ -47,16 +49,17 @@ export default function App() {
         body: JSON.stringify({
           x: e.clientX,
           y: e.clientY,
-          pathname: window.location.pathname,
+          pathname: location.pathname,
           timestamp: Date.now(),
         }),
       });
     };
+
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
-  }, []);
+  }, [location.pathname, user]);
 
-  // --- 🔥 2. rrweb Session Recorder
+  // 2. rrweb Session Recorder
   useEffect(() => {
     const events = [];
     const stop = record({ emit: (event) => events.push(event) });
@@ -76,7 +79,7 @@ export default function App() {
     };
   }, []);
 
-  // --- 🔥 3. Path Navigation Tracker
+  // 3. Path Navigation Tracker
   useEffect(() => {
     fetch(`${API_BASE}/path`, {
       method: "POST",
@@ -88,7 +91,7 @@ export default function App() {
     });
   }, [location]);
 
-  // --- 📁 File Upload + Auth Header
+  // Auth Header
   const authHeader = async () => {
     if (!user) return {};
     const token = await user.getIdToken();
