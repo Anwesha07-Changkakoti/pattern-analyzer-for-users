@@ -12,20 +12,18 @@ export default function HeatmapChart({ fileId }) {
   const [dataMatrix, setDataMatrix] = useState([]);
 
   useEffect(() => {
-    if (!fileId) return; // wait until we have an analysis result
+  if (!fileId) return;
 
-    axios
-      .get(
-        `https://user-pattern-analyzer.onrender.com/analytics/heatmap/${fileId}`
-      )
-      .then((res) => {
-        setYLabels(Object.keys(res.data.data));   // Monday‑Sunday
-        setDataMatrix(Object.values(res.data.data));
-      })
-      .catch((err) => console.error("Heatmap fetch error", err));
-  }, [fileId]);
+  axios
+    .get(`${API_BASE}/analytics/heatmap/${fileId}`)
+    .then((res) => {
+      setYLabels(Object.keys(res.data.data));   // Monday–Sunday
+      setDataMatrix(Object.values(res.data.data));
+    })
+    .catch((err) => console.error("Heatmap fetch error", err));
+}, [fileId]);
 
-  if (!fileId) return null;
+
 
   return (
     <div className="p-4 border border-green-500 rounded-xl m-4 bg-black">
