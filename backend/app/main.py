@@ -4,7 +4,7 @@ import os
 load_dotenv()
 firebase_key = os.getenv("FIREBASE_KEY")
 
-from fastapi import FastAPI, UploadFile, File, Depends, WebSocket, WebSocketDisconnect, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, Depends, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.encoders import jsonable_encoder
@@ -36,7 +36,7 @@ from app.utils.firebase_auth import (
 Base.metadata.create_all(bind=engine)
 
 # Logging
-logger = logging.getLogger("user​-pattern​-analyzer")
+logger = logging.getLogger("user-pattern-analyzer")
 logging.basicConfig(level=logging.INFO)
 
 # Local storage for CSV downloads and tracking
@@ -50,7 +50,6 @@ SESSION_STORE: List[Dict] = []
 NAV_PATHS: List[Dict] = []
 
 app = FastAPI(title="User Pattern Analyzer API")
-print(">>> CORS MIDDLEWARE LOADED ✅ <<<")
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,6 +60,41 @@ app.add_middleware(
 )
 
 app.include_router(results_router)
+@app.post("/upload-click-logs")
+async def upload_click_logs(file: UploadFile = File(...), user: Dict = Depends(get_current_user)):
+    raw_bytes = await file.read()
+    filename = file.filename or "uploaded"
+
+    try:
+        if filename.endswith(".json"):
+            df = pd.read_json(io.BytesIO(raw_bytes))
+        else:
+            df = pd.read_csv(io.BytesIO(raw_bytes))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Error parsing file: {exc}")
+
+    # --- 📍 Custom Mapping Logic
+    # Attempt to create x, y coordinates from columns like Port, Bytes, etc.
+    if not {"x", "y"}.issubset(df.columns):
+        df = df.reset_index()  # fallback index as 'y'
+        df["x"] = df["Port"] if "Port" in df.columns else df["index"] * 10  # Example logic
+        df["y"] = df["Bytes"] if "Bytes" in df.columns else df["index"] * 5
+
+    # Normalize or clip values for realistic viewport sizes
+    df["x"] = df["x"].astype(float).clip(0, 1200)
+    df["y"] = df["y"].astype(float).clip(0, 600)
+    df["timestamp"] = pd.Timestamp.now().value // 1_000_000  # fallback timestamp
+
+    for _, row in df.iterrows():
+        if pd.notna(row["x"]) and pd.notna(row["y"]):
+            CLICK_STORE.append({
+                "x": float(row["x"]),
+                "y": float(row["y"]),
+                "timestamp": int(row.get("timestamp", pd.Timestamp.now().value // 1_000_000)),
+                "pathname": "/uploaded"
+            })
+
+    return {"status": "clicks extracted", "count": len(df)}
 
 @app.get("/test-auth")
 async def test_auth_route(user: Dict = Depends(get_current_user)):
@@ -105,7 +139,21 @@ async def analyze(
     ANOMALY_STORE[file_id] = df_out[df_out["anomaly"] == 1].copy()
     df_json_safe = df_out.replace({np.nan: None}).to_dict(orient="records")
 
-    return jsonable_encoder({"summary": summary, "rows": df_json_safe, "file_id": file_id})
+    # Identify 2 numeric columns to use for heatmap coordinates
+    numeric_cols = df_out.select_dtypes(include='number').columns.tolist()
+    x_col, y_col = numeric_cols[:2] if len(numeric_cols) >= 2 else (None, None)
+
+    heatmap_points = []
+    if x_col and y_col:
+        heatmap_points = df_out[df_out["anomaly"] == 1][[x_col, y_col]].dropna().values.tolist()
+
+    return jsonable_encoder({
+        "summary": summary,
+        "rows": df_json_safe,
+        "file_id": file_id,
+        "heatmap": heatmap_points,
+        "heatmap_columns": {"x": x_col, "y": y_col}
+    })
 
 @app.get("/download/{file_id}")
 async def download(file_id: str, user: Dict = Depends(get_current_user)):
@@ -136,7 +184,6 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
 
-# ➕ Click tracking for heatmap
 @app.post("/clicks")
 async def track_click(data: Dict):
     CLICK_STORE.append(data)
@@ -144,21 +191,14 @@ async def track_click(data: Dict):
 
 @app.get("/heatmap/clicks")
 async def get_clicks():
-    # Only include clicks with valid numeric x and y values
     valid_clicks = [
         d for d in CLICK_STORE
         if isinstance(d, dict)
         and isinstance(d.get("x"), (int, float))
         and isinstance(d.get("y"), (int, float))
     ]
-
-    if not valid_clicks:
-        # Optional: Return an empty list or raise an error if no valid data
-        return []
-
     return valid_clicks
 
-# ➕ Session replay tracking
 @app.post("/session")
 async def store_session(data: Dict):
     SESSION_STORE.append(data)
@@ -170,7 +210,6 @@ async def get_latest_session():
         raise HTTPException(status_code=404, detail="No sessions found")
     return SESSION_STORE[-1]
 
-# ➕ Path tracking
 @app.post("/path")
 async def track_path(data: Dict):
     NAV_PATHS.append(data)
