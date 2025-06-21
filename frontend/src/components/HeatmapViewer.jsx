@@ -1,52 +1,57 @@
 import h337 from "heatmap.js";
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
+
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 export default function HeatmapViewer() {
-  const containerRef = useRef(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchClicks = async () => {
-      try {
-        const res = await fetch("http://localhost:8000/heatmap/clicks");
-        const data = await res.json();
+    const container = document.getElementById("heatmapContainer");
+    if (!container) return;
 
-        if (!containerRef.current) return;
+    fetch(`${API_BASE}/heatmap/clicks`)
+      .then((res) => res.json())
+      .then((clicks) => {
+        const points = clicks.map((d) => ({
+          x: d.x,
+          y: d.y,
+          value: 1,
+        }));
 
-        const heatmap = h337.create({
-          container: containerRef.current,
+        const heatmapInstance = h337.create({
+          container,
           radius: 40,
+          maxOpacity: 0.6,
+          minOpacity: 0,
+          blur: 0.85,
         });
 
-        heatmap.setData({
+        heatmapInstance.setData({
           max: 5,
-          data: data.map((d) => ({
-            x: d.x,
-            y: d.y,
-            value: 1,
-          })),
+          data: points,
         });
-      } catch (err) {
-        console.error("Failed to load heatmap data", err);
-      }
-    };
 
-    fetchClicks();
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Heatmap fetch error:", err);
+      });
   }, []);
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold mb-2">Click Heatmap</h2>
+    <div className="p-6">
+      <h2 className="text-xl font-bold text-cybergreen mb-4">Click Heatmap</h2>
       <div
-        ref={containerRef}
         id="heatmapContainer"
         style={{
           width: "100%",
-          height: "500px",
+          height: "600px",
           position: "relative",
-          border: "1px solid #444",
-          borderRadius: "8px",
+          backgroundColor: "#111",
         }}
       />
+      {loading && <p className="text-cybergreen mt-4">Loading heatmap…</p>}
     </div>
   );
 }
