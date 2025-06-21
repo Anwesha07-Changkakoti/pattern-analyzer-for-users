@@ -1,42 +1,13 @@
-import {
-  Cell,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-} from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 const COLORS = ["#39FF14", "#FF0000"];
 
 export default function AnomalyPie({ summary }) {
-  // Validate input
-  const isValid =
-    summary &&
-    typeof summary.normal === "number" &&
-    typeof summary.anomalies === "number" &&
-    (summary.normal + summary.anomalies) > 0;
-
-  if (!isValid) {
-    return (
-      <div className="text-red-500 border border-red-700 p-2 rounded bg-black">
-        Pie chart cannot render due to invalid or missing summary data.
-      </div>
-    );
-  }
-
+  if (!summary) return null;
   const data = [
     { name: "Normal", value: summary.normal },
     { name: "Anomalies", value: summary.anomalies },
   ];
-
-  const total = summary.normal + summary.anomalies;
-
-  const renderLabel = ({ name, value }) => {
-    const percent = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-    return `${name}: ${percent}%`;
-  };
-
   return (
     <div className="h-64">
       <ResponsiveContainer>
@@ -47,15 +18,13 @@ export default function AnomalyPie({ summary }) {
             cy="50%"
             outerRadius={80}
             dataKey="value"
-            label={renderLabel}
-            isAnimationActive={false}
+            label
           >
-            {data.map((entry, idx) => (
-              <Cell key={`cell-${idx}`} fill={COLORS[idx % COLORS.length]} />
+            {data.map((_, idx) => (
+              <Cell key={idx} fill={COLORS[idx]} />
             ))}
           </Pie>
-          <Tooltip formatter={(value) => `${value} logs`} />
-          <Legend verticalAlign="bottom" height={36} />
+          <Tooltip />
         </PieChart>
       </ResponsiveContainer>
     </div>
