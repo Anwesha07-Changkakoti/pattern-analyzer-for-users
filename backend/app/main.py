@@ -94,7 +94,7 @@ print(">>> CORS MIDDLEWARE LOADED ✅ <<<")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://pattern-analyzer-for-u-git-409984-anwesha-changkakotis-projects.vercel.app"
+        "https://pattern-analyzer-for-users-h610i3938.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
