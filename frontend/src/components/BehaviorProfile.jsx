@@ -5,7 +5,7 @@ export default function BehaviorProfile() {
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
-  axios.get("/api/profile")
+  axios.get(`${import.meta.env.VITE_API_BASE}/api/profile`)
     .then(res => {
       console.log("Profile data received:", res.data);  // ✅ ADD THIS
       setProfile(res.data);
