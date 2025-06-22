@@ -61,24 +61,35 @@ export default function App() {
 
   // ✅ 2. rrweb Session Recorder (Fixed)
   useEffect(() => {
-    const events = [];
-    const stop = record({ emit: (event) => events.push(event) });
+  const events = [];
 
-    const sendEvents = () => {
-      const blob = new Blob([JSON.stringify({ events })], {
-        type: "application/json",
-      });
-      navigator.sendBeacon(`${API_BASE}/session`, blob);
-    };
+  const stop = record({
+    emit(event) {
+      events.push(event);
+    },
+  });
 
-    window.addEventListener("beforeunload", sendEvents);
+  const sendEvents = () => {
+    if (events.length === 0) return; // ✅ avoid sending empty sessions
 
-    return () => {
-      stop();
-      sendEvents();
-      window.removeEventListener("beforeunload", sendEvents);
-    };
-  }, []);
+    const blob = new Blob([JSON.stringify({ events })], {
+      type: "application/json",
+    });
+
+    navigator.sendBeacon(`${API_BASE}/session`, blob);
+  };
+
+  // ✅ Send session on tab close/reload
+  window.addEventListener("beforeunload", sendEvents);
+
+  // ✅ Also send if user navigates within SPA (React router)
+  return () => {
+    stop();
+    sendEvents(); // flush on component unmount
+    window.removeEventListener("beforeunload", sendEvents);
+  };
+}, []);
+
 
   // ✅ 3. Path Tracker
   useEffect(() => {
