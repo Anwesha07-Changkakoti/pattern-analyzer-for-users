@@ -18,7 +18,9 @@ from typing import Dict, List
 
 from app.services.ml_model import detect_anomalies
 from app.services.feature_engineering import preprocess
-
+from sqlalchemy.orm import Session
+from app.database import get_db            # <-- make sure import exists
+from app.models import AnalysisResult
 from app.models import Base
 from app.database import engine
 from app.routes.results import router as results_router
@@ -105,11 +107,13 @@ async def test_auth_route(user: Dict = Depends(get_current_user)):
 @app.post("/analyze")
 async def analyze(
     file: UploadFile = File(...),
-    user: Dict = Depends(get_current_user),
+    user: Dict       = Depends(get_current_user),
+    db:  Session     = Depends(get_db),     # ✅ inject DB session
 ):
     raw_bytes = await file.read()
-    filename = file.filename or "uploaded"
+    filename   = file.filename or "uploaded"
 
+    # ---------- parse ----------------------------------------------------
     try:
         if filename.endswith(".json"):
             df_raw = pd.read_json(io.BytesIO(raw_bytes))
@@ -117,8 +121,9 @@ async def analyze(
             df_raw = pd.read_csv(io.BytesIO(raw_bytes))
     except Exception as exc:
         logger.exception("Failed to parse file")
-        raise HTTPException(status_code=400, detail=f"Failed to parse file: {exc}")
+        raise HTTPException(400, f"Failed to parse file: {exc}")
 
+    # ---------- predict anomalies ---------------------------------------
     df_proc = preprocess(df_raw)
     preds, reasons = detect_anomalies(
         df_raw=df_proc,
@@ -127,35 +132,50 @@ async def analyze(
         return_reasons=True,
     )
 
-    df_out = df_raw.copy()
-    df_out["anomaly"] = preds
+    df_out               = df_raw.copy()
+    df_out["anomaly"]    = preds
     df_out["anomaly_reason"] = reasons
 
     summary = {
-        "total": int(len(df_out)),
-        "anomalies": int((df_out["anomaly"] == 1).sum()),
-        "normal": int((df_out["anomaly"] == 0).sum()),
+        "total":      len(df_out),
+        "anomalies":  int((df_out["anomaly"] == 1).sum()),
+        "normal":     int((df_out["anomaly"] == 0).sum()),
     }
 
+    # ---------- store anomalies in-memory & on disk ----------------------
     file_id = str(uuid.uuid4())
     ANOMALY_STORE[file_id] = df_out[df_out["anomaly"] == 1].copy()
-    df_json_safe = df_out.replace({np.nan: None}).to_dict(orient="records")
 
-    # Identify 2 numeric columns to use for heatmap coordinates
-    numeric_cols = df_out.select_dtypes(include='number').columns.tolist()
-    x_col, y_col = numeric_cols[:2] if len(numeric_cols) >= 2 else (None, None)
+    # ---------- ✅  save result metadata to DB  --------------------------
+    db.add(
+        AnalysisResult(
+            user_id       = user["uid"],
+            file_id       = file_id,              # allows download later
+            file_name     = filename,
+            total_records = summary["total"],
+            anomaly_count = summary["anomalies"],
+            timestamp     = datetime.datetime.utcnow(),
+        )
+    )
+    db.commit()
 
-    heatmap_points = []
-    if x_col and y_col:
-        heatmap_points = df_out[df_out["anomaly"] == 1][[x_col, y_col]].dropna().values.tolist()
+    # ---------- build response ------------------------------------------
+    df_json_safe  = df_out.replace({np.nan: None}).to_dict(orient="records")
+    numeric_cols  = df_out.select_dtypes(include="number").columns.tolist()
+    x_col, y_col  = numeric_cols[:2] if len(numeric_cols) >= 2 else (None, None)
+    heatmap_points = (
+        df_out[df_out["anomaly"] == 1][[x_col, y_col]].dropna().values.tolist()
+        if x_col and y_col else []
+    )
 
     return jsonable_encoder({
-        "summary": summary,
-        "rows": df_json_safe,
-        "file_id": file_id,
-        "heatmap": heatmap_points,
-        "heatmap_columns": {"x": x_col, "y": y_col}
+        "summary":  summary,
+        "rows":     df_json_safe,
+        "file_id":  file_id,
+        "heatmap":  heatmap_points,
+        "heatmap_columns": {"x": x_col, "y": y_col},
     })
+
 
 @app.get("/download/{file_id}")
 async def download(file_id: str, user: Dict = Depends(get_current_user)):
