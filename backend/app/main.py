@@ -60,6 +60,7 @@ app.add_middleware(
 )
 
 app.include_router(results_router)
+
 @app.post("/upload-click-logs")
 async def upload_click_logs(file: UploadFile = File(...), user: Dict = Depends(get_current_user)):
     raw_bytes = await file.read()
@@ -209,6 +210,14 @@ async def get_latest_session():
     if not SESSION_STORE:
         raise HTTPException(status_code=404, detail="No sessions found")
     return SESSION_STORE[-1]
+
+@app.get("/session/debug")
+def debug_sessions():
+    return {
+        "count": len(SESSION_STORE),
+        "latest": SESSION_STORE[-1] if SESSION_STORE else None
+    }
+
 
 @app.post("/path")
 async def track_path(data: Dict):
