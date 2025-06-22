@@ -1,7 +1,7 @@
 import axios from "axios";
 import { useEffect, useRef, useState } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
-import { record } from "rrweb";
+import { record, snapshot } from "rrweb";
 
 import { useAuth } from "../contexts/AuthContext";
 import AdminDashboard from "../pages/AdminDashboard";
@@ -60,32 +60,28 @@ export default function App() {
   }, [location.pathname, user]);
 
   // ✅ 2. rrweb Session Recorder (Fixed)
-  useEffect(() => {
-  const events = [];
 
-  const stop = record({
-    emit(event) {
-      events.push(event);
-    },
-  });
+useEffect(() => {
+  const events = [];
+  const stop = record({ emit: (event) => events.push(event) });
+
+  // Force one snapshot 2s after recording starts
+  setTimeout(() => {
+    snapshot((snapEvent) => events.push(snapEvent));
+  }, 2000);
 
   const sendEvents = () => {
-    if (events.length === 0) return; // ✅ avoid sending empty sessions
-
     const blob = new Blob([JSON.stringify({ events })], {
       type: "application/json",
     });
-
     navigator.sendBeacon(`${API_BASE}/session`, blob);
   };
 
-  // ✅ Send session on tab close/reload
   window.addEventListener("beforeunload", sendEvents);
 
-  // ✅ Also send if user navigates within SPA (React router)
   return () => {
     stop();
-    sendEvents(); // flush on component unmount
+    sendEvents();
     window.removeEventListener("beforeunload", sendEvents);
   };
 }, []);
