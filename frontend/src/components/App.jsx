@@ -72,12 +72,11 @@ export default function App() {
       });
     };
 
-    window.addEventListener("beforeunload", sendEvents);
-    return () => {
-      stop();
-      sendEvents();
-    };
-  }, []);
+    window.addEventListener("beforeunload", () => {
+  const blob = new Blob([JSON.stringify({ events })], { type: "application/json" });
+  navigator.sendBeacon(`${API_BASE}/session`, blob);
+});
+
 
   // 3. Path Navigation Tracker
   useEffect(() => {
