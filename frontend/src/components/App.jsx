@@ -59,29 +59,24 @@ export default function App() {
     return () => document.removeEventListener("click", handleClick);
   }, [location.pathname, user]);
 
-  // ✅ 2. rrweb Session Recorder
+  // ✅ 2. rrweb Session Recorder (Fixed)
   useEffect(() => {
     const events = [];
     const stop = record({ emit: (event) => events.push(event) });
 
     const sendEvents = () => {
-      fetch(`${API_BASE}/session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ events }),
-      });
-    };
-
-    window.addEventListener("beforeunload", () => {
       const blob = new Blob([JSON.stringify({ events })], {
         type: "application/json",
       });
       navigator.sendBeacon(`${API_BASE}/session`, blob);
-    });
+    };
+
+    window.addEventListener("beforeunload", sendEvents);
 
     return () => {
       stop();
       sendEvents();
+      window.removeEventListener("beforeunload", sendEvents);
     };
   }, []);
 
@@ -169,6 +164,7 @@ export default function App() {
     return () => clearInterval(id);
   }, [fullBatch]);
 
+  // ✅ 4. WebSocket Stream (unchanged)
   const wsRef = useRef(null);
   useEffect(() => {
     if (authLoading) return;
@@ -300,7 +296,6 @@ export default function App() {
         <Route path="/heatmap" element={<HeatmapViewer />} />
         <Route path="/replay" element={<SessionReplay />} />
         <Route path="/session" element={<SessionReplay />} />
-
         <Route path="/flow" element={<PathFlowChart />} />
       </Routes>
     </div>
