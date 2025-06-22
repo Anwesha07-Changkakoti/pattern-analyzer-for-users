@@ -126,7 +126,7 @@ async def analyze(
 
     df_proc = preprocess(df_raw)
     preds, reasons = detect_anomalies(
-        df_raw=df_proc,
+        df_raw=df_raw,
         user_uid=user["uid"],
         file_name=filename,
         return_reasons=True,
