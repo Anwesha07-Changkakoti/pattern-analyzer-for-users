@@ -299,6 +299,8 @@ export default function App() {
         <Route path="/unauthorized" element={<Unauthorized />} />
         <Route path="/heatmap" element={<HeatmapViewer />} />
         <Route path="/replay" element={<SessionReplay />} />
+        <Route path="/session" element={<SessionReplay />} />
+
         <Route path="/flow" element={<PathFlowChart />} />
       </Routes>
     </div>
