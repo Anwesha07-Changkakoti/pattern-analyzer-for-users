@@ -1,8 +1,10 @@
+// src/contexts/AuthContext.jsx
+
 import { initializeApp } from "firebase/app";
 import {
+  browserLocalPersistence,
   getAuth,
   GoogleAuthProvider,
-  inMemoryPersistence,
   onIdTokenChanged,
   setPersistence,
   signInWithPopup,
@@ -13,19 +15,13 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 import { firebaseConfig } from "../firebase/firebaseConfig";
 
-
-
+// Initialize Firebase app and services
 const FirebaseApp = initializeApp(firebaseConfig);
 const Auth = getAuth(FirebaseApp);
-
-
-setPersistence(Auth, inMemoryPersistence).catch(console.error);
-
+setPersistence(Auth, browserLocalPersistence).catch(console.error);
 const DB = getFirestore(FirebaseApp);
 
-
 // React context
-
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
@@ -34,16 +30,13 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  
   useEffect(() => {
     const unsubscribe = onIdTokenChanged(Auth, async (u) => {
       if (u) {
         setUser(u);
-        
         const idTokenResult = await u.getIdTokenResult(true);
         setRole(idTokenResult.claims.role || "user");
-
-        const freshToken = await u.getIdToken(true); 
+        const freshToken = await u.getIdToken(true);
         setToken(freshToken);
       } else {
         setUser(null);
@@ -56,10 +49,6 @@ export function AuthProvider({ children }) {
     return () => unsubscribe();
   }, []);
 
- 
-  // Auth helpers
-  
-
   const login = async () => {
     const provider = new GoogleAuthProvider();
     const result = await signInWithPopup(Auth, provider);
@@ -69,7 +58,6 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     await signOut(Auth);
-  
     setUser(null);
     setRole(null);
     setToken(null);
@@ -82,7 +70,7 @@ export function AuthProvider({ children }) {
     loading,
     login,
     logout,
-    db: DB, 
+    db: DB,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
