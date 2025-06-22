@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { record } from "rrweb";
 
@@ -22,57 +22,14 @@ import StatsCard from "./StatsCard";
 import Unauthorized from "./Unauthorized";
 import Upload from "./Upload";
 
-// --- Config --------------------------------------------------------------
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 const WS_BASE = import.meta.env.VITE_WS_BASE ?? "ws://localhost:8000";
 const WS_PATH = "/ws/stream";
 
-// ------------------------------------------------------------------------
 export default function App() {
   const { user, role, loading: authLoading, login } = useAuth();
   const location = useLocation();
 
-  // ------------------- rrweb Session Recorder ---------------------------
-  const eventsRef = useRef([]);
-
-  // Persist the current buffer to backend and clear it
-  const flushSession = useCallback(() => {
-    if (eventsRef.current.length === 0) return;
-    const blob = new Blob([
-      JSON.stringify({ events: eventsRef.current }),
-    ], { type: "application/json" });
-    navigator.sendBeacon(`${API_BASE}/session`, blob);
-    eventsRef.current = [];
-  }, []);
-
-  // Start recording once
-  useEffect(() => {
-    const stop = record({
-      emit: (event) => eventsRef.current.push(event),
-    });
-
-    // Flush on pagehide / when tab becomes hidden / beforeunload fallback
-    const handleVisibility = () => {
-      if (document.visibilityState === "hidden") flushSession();
-    };
-
-    window.addEventListener("pagehide", flushSession);
-    window.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      stop();
-      flushSession();
-      window.removeEventListener("pagehide", flushSession);
-      window.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [flushSession]);
-
-  // Flush when the React Router pathname changes (new logical page)
-  useEffect(() => {
-    flushSession();
-  }, [location.pathname, flushSession]);
-
-  // ------------------------------ State ----------------------------------
   const [summary, setSummary] = useState(null);
   const [fullBatch, setFullBatch] = useState([]);
   const [batchRows, setBatchRows] = useState([]);
@@ -80,7 +37,6 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [fileId, setFileId] = useState(null);
 
-  // ------------------------- Click Tracking ------------------------------
   useEffect(() => {
     const allowedPaths = ["/", "/heatmap", "/history"];
     if (!allowedPaths.includes(location.pathname) || !user) return;
@@ -102,23 +58,58 @@ export default function App() {
     return () => document.removeEventListener("click", handleClick);
   }, [location.pathname, user]);
 
-  // ----------------------- Path Tracking ---------------------------------
+  // ✅ Updated rrweb recorder with full snapshot flush
+  useEffect(() => {
+    const events = [];
+
+    const stop = record({
+      emit: (event) => {
+        events.push(event);
+        if (event.type === 2) {
+          const blob = new Blob([JSON.stringify({ events })], {
+            type: "application/json",
+          });
+          navigator.sendBeacon(`${API_BASE}/session`, blob);
+        }
+      },
+      recordCanvas: true,
+    });
+
+    const sendEvents = () => {
+      if (events.length > 0) {
+        const blob = new Blob([JSON.stringify({ events })], {
+          type: "application/json",
+        });
+        navigator.sendBeacon(`${API_BASE}/session`, blob);
+      }
+    };
+
+    window.addEventListener("beforeunload", sendEvents);
+
+    return () => {
+      stop();
+      sendEvents();
+      window.removeEventListener("beforeunload", sendEvents);
+    };
+  }, []);
+
   useEffect(() => {
     fetch(`${API_BASE}/path`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pathname: location.pathname, timestamp: Date.now() }),
+      body: JSON.stringify({
+        pathname: location.pathname,
+        timestamp: Date.now(),
+      }),
     });
   }, [location]);
 
-  // ---------------------------- Helpers ----------------------------------
   const authHeader = async () => {
     if (!user) return {};
     const token = await user.getIdToken();
     return { Authorization: `Bearer ${token}` };
   };
 
-  // -------------------------- Upload Handler -----------------------------
   const onUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -139,7 +130,6 @@ export default function App() {
       setFullBatch(data.rows);
       setFileId(data.file_id);
       setBatchRows([]);
-      flushSession(); // save rrweb events for this upload action
     } catch (err) {
       console.error(err);
       alert("Upload failed — check backend, CORS, or auth.");
@@ -148,17 +138,18 @@ export default function App() {
     }
   };
 
-  // ------------------------ Download Handler -----------------------------
   const handleDownload = async () => {
     try {
       const token = await user.getIdToken();
       const response = await fetch(`${API_BASE}/download/${fileId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
       if (!response.ok) throw new Error("Download failed");
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
+
       const a = document.createElement("a");
       a.href = url;
       a.download = "anomalies.csv";
@@ -172,7 +163,6 @@ export default function App() {
     }
   };
 
-  // ------------- Gradually stream analyzed batch results -----------------
   useEffect(() => {
     if (!fullBatch.length) return;
     let idx = 0;
@@ -185,10 +175,10 @@ export default function App() {
     return () => clearInterval(id);
   }, [fullBatch]);
 
-  // -------------------------- Live WebSocket -----------------------------
   const wsRef = useRef(null);
   useEffect(() => {
     if (authLoading) return;
+
     let retryTimer;
     let debTimer;
 
@@ -219,7 +209,6 @@ export default function App() {
     };
   }, [authLoading, user]);
 
-  // ------------------------------ Render ---------------------------------
   if (authLoading) {
     return <p className="p-6 text-cybergreen">Loading authentication…</p>;
   }
@@ -232,8 +221,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-black text-cybergreen">
       <Navbar />
-
-      {/* ---------------- Unauthenticated Landing ---------------- */}
       {!user ? (
         <div className="p-6 text-center">
           <h1 className="text-3xl font-bold mb-4">User Pattern Analyzer</h1>
@@ -249,7 +236,6 @@ export default function App() {
         <div className="p-6 space-y-6">
           <h1 className="text-3xl font-bold">User Pattern Analyzer</h1>
 
-          {/* ---------------- File Upload & Stats ---------------- */}
           {role !== "viewer" && (
             <>
               <label className="inline-block px-4 py-2 bg-cybergreen text-black rounded cursor-pointer">
@@ -276,21 +262,22 @@ export default function App() {
               <DataTable rows={batchRows} title="Batch Results (streamed)" height={400} />
 
               {fileId && (
-                <button onClick={handleDownload} className="underline text-cybergreen">
+                <button
+                  onClick={handleDownload}
+                  className="underline text-cybergreen"
+                >
                   Download Anomalies CSV
                 </button>
               )}
             </>
           )}
 
-          {/* ---------------- Live Section ---------------- */}
           <h2 className="text-2xl font-bold">Real‑Time Stream</h2>
           <DataTable rows={liveRows} title="Live Logs (last 100)" height={300} />
           <LiveBarChart dataStream={liveRows} />
         </div>
       )}
 
-      {/* ---------------- Routes ---------------- */}
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
