@@ -18,8 +18,10 @@ from typing import Dict, List
 
 from app.services.ml_model import detect_anomalies
 from app.services.feature_engineering import preprocess
+from app.services.behavior_profile import extract_behavior_features
+from app.services.profile_updater import upsert_behavior_profile
 from sqlalchemy.orm import Session
-from app.database import get_db            # <-- make sure import exists
+from app.database import get_db
 from app.models import AnalysisResult
 from app.models import Base
 from app.database import engine
@@ -34,6 +36,8 @@ from app.utils.firebase_auth import (
     get_current_user,
     get_current_user_optional_ws,
 )
+from app.routes.profile import router as profile_router
+
 
 Base.metadata.create_all(bind=engine)
 
@@ -62,7 +66,8 @@ app.add_middleware(
 )
 
 app.include_router(results_router)
-app.include_router(session_router) 
+app.include_router(session_router)
+app.include_router(profile_router) 
 
 @app.post("/upload-click-logs")
 async def upload_click_logs(file: UploadFile = File(...), user: Dict = Depends(get_current_user)):
@@ -77,17 +82,14 @@ async def upload_click_logs(file: UploadFile = File(...), user: Dict = Depends(g
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Error parsing file: {exc}")
 
-    # --- 📍 Custom Mapping Logic
-    # Attempt to create x, y coordinates from columns like Port, Bytes, etc.
     if not {"x", "y"}.issubset(df.columns):
-        df = df.reset_index()  # fallback index as 'y'
-        df["x"] = df["Port"] if "Port" in df.columns else df["index"] * 10  # Example logic
+        df = df.reset_index()
+        df["x"] = df["Port"] if "Port" in df.columns else df["index"] * 10
         df["y"] = df["Bytes"] if "Bytes" in df.columns else df["index"] * 5
 
-    # Normalize or clip values for realistic viewport sizes
     df["x"] = df["x"].astype(float).clip(0, 1200)
     df["y"] = df["y"].astype(float).clip(0, 600)
-    df["timestamp"] = pd.Timestamp.now().value // 1_000_000  # fallback timestamp
+    df["timestamp"] = pd.Timestamp.now().value // 1_000_000
 
     for _, row in df.iterrows():
         if pd.notna(row["x"]) and pd.notna(row["y"]):
@@ -108,12 +110,11 @@ async def test_auth_route(user: Dict = Depends(get_current_user)):
 async def analyze(
     file: UploadFile = File(...),
     user: Dict       = Depends(get_current_user),
-    db:  Session     = Depends(get_db),     # ✅ inject DB session
+    db:  Session     = Depends(get_db),
 ):
     raw_bytes = await file.read()
     filename   = file.filename or "uploaded"
 
-    # ---------- parse ----------------------------------------------------
     try:
         if filename.endswith(".json"):
             df_raw = pd.read_json(io.BytesIO(raw_bytes))
@@ -123,7 +124,6 @@ async def analyze(
         logger.exception("Failed to parse file")
         raise HTTPException(400, f"Failed to parse file: {exc}")
 
-    # ---------- predict anomalies ---------------------------------------
     df_proc = preprocess(df_raw)
     preds, reasons = detect_anomalies(
         df_raw=df_proc,
@@ -142,24 +142,28 @@ async def analyze(
         "normal":     int((df_out["anomaly"] == 0).sum()),
     }
 
-    # ---------- store anomalies in-memory & on disk ----------------------
     file_id = str(uuid.uuid4())
     ANOMALY_STORE[file_id] = df_out[df_out["anomaly"] == 1].copy()
 
-    # ---------- ✅  save result metadata to DB  --------------------------
     db.add(
         AnalysisResult(
             user_id       = user["uid"],
-            file_id       = file_id,              # allows download later
+            file_id       = file_id,
             file_name     = filename,
             total_records = summary["total"],
             anomaly_count = summary["anomalies"],
             timestamp     = datetime.datetime.utcnow(),
         )
     )
+
+    try:
+        behavior_features = extract_behavior_features(df_out, user["uid"])
+        upsert_behavior_profile(db, behavior_features)
+    except Exception as e:
+        logger.error(f"Behavior profile update failed: {e}")
+
     db.commit()
 
-    # ---------- build response ------------------------------------------
     df_json_safe  = df_out.replace({np.nan: None}).to_dict(orient="records")
     numeric_cols  = df_out.select_dtypes(include="number").columns.tolist()
     x_col, y_col  = numeric_cols[:2] if len(numeric_cols) >= 2 else (None, None)
@@ -175,7 +179,6 @@ async def analyze(
         "heatmap":  heatmap_points,
         "heatmap_columns": {"x": x_col, "y": y_col},
     })
-
 
 @app.get("/download/{file_id}")
 async def download(file_id: str, user: Dict = Depends(get_current_user)):
@@ -221,7 +224,6 @@ async def get_clicks():
     ]
     return valid_clicks
 
-
 @app.post("/path")
 async def track_path(data: Dict):
     NAV_PATHS.append(data)
@@ -252,4 +254,4 @@ async def get_path_flow():
         for (source, target), count in transitions.items()
     ]
 
-    return {"nodes": nodes, "links": links}   
+    return {"nodes": nodes, "links": links}

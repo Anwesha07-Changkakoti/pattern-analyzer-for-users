@@ -8,6 +8,8 @@ from typing import List, Tuple, Union
 
 from app.database import SessionLocal
 from app.models import AnalysisResult
+from app.services.behavior_profile import extract_behavior_features
+from app.services.profile_updater import upsert_behavior_profile
 
 # Logging
 logging.basicConfig(
@@ -16,18 +18,13 @@ logging.basicConfig(
     format="%(asctime)s — %(levelname)s — %(message)s",
 )
 
-
 cache: dict[str, List[int]] = {}
 
 # Utility helpers
-
 def hash_dataframe(df: pd.DataFrame) -> str:
-    
     return hashlib.sha256(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
 
-
 def validate_schema(df: pd.DataFrame) -> pd.DataFrame:
-    
     if df.empty:
         raise ValueError("Input DataFrame is empty.")
 
@@ -41,14 +38,9 @@ def validate_schema(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-
-
-
-
 def _compute_reasons(df: pd.DataFrame, preds: List[int], top_n: int = 3) -> List[str]:
-    
     med = df.median()
-    mad = (df - med).abs().median() + 1e-9  
+    mad = (df - med).abs().median() + 1e-9
     reasons: List[str] = []
     for i, row in df.iterrows():
         if preds[i] == 0:
@@ -62,9 +54,7 @@ def _compute_reasons(df: pd.DataFrame, preds: List[int], top_n: int = 3) -> List
 
     return reasons
 
-
 def _log_anomalies(df: pd.DataFrame, preds: List[int], reasons: List[str]) -> None:
-    
     for idx, (row, pred, why) in enumerate(zip(df.iterrows(), preds, reasons)):
         if pred == 1:
             logging.info(
@@ -74,10 +64,7 @@ def _log_anomalies(df: pd.DataFrame, preds: List[int], reasons: List[str]) -> No
                 row[1].to_dict(),
             )
 
-
-
 # Public API
-
 def detect_anomalies(
     df_raw: pd.DataFrame,
     *,
@@ -86,44 +73,34 @@ def detect_anomalies(
     contamination: float = 0.05,
     return_reasons: bool = False,
 ) -> Union[List[int], Tuple[List[int], List[str]]]:
-    
-    # 1 Validate & preprocess
     df_proc = validate_schema(df_raw)
-
-    # 2️ Cache lookup
     df_hash = hash_dataframe(df_proc)
+
     if df_hash in cache:
         preds = cache[df_hash]
     else:
         model = IsolationForest(contamination=contamination, random_state=42)
         model.fit(df_proc)
-        pred_raw = model.predict(df_proc)  # -1 for anomaly, 1 for normal
+        pred_raw = model.predict(df_proc)
         preds = [1 if p == -1 else 0 for p in pred_raw]
         cache[df_hash] = preds
 
-    
     reasons = _compute_reasons(df_proc, preds)
 
-    
     _store_summary(
         user_uid=user_uid,
         file_name=file_name,
         total_records=len(preds),
         anomaly_count=sum(preds),
+        df_with_preds=df_raw.assign(anomaly=preds)  # attach preds for behavior profile
     )
 
-   
     _log_anomalies(df_proc, preds, reasons)
 
     return (preds, reasons) if return_reasons else preds
 
-
-
 # Internal helpers
-
-
-def _store_summary(*, user_uid: str, file_name: str, total_records: int, anomaly_count: int) -> None:
-    
+def _store_summary(*, user_uid: str, file_name: str, total_records: int, anomaly_count: int, df_with_preds: pd.DataFrame) -> None:
     db = SessionLocal()
     try:
         db.add(
@@ -135,6 +112,13 @@ def _store_summary(*, user_uid: str, file_name: str, total_records: int, anomaly
                 timestamp=datetime.utcnow(),
             )
         )
+
+        try:
+            behavior_features = extract_behavior_features(df_with_preds, user_uid)
+            upsert_behavior_profile(db, behavior_features)
+        except Exception as e:
+            logging.error(f"Behavior profile update failed: {e}")
+
         db.commit()
     finally:
         db.close()

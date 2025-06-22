@@ -8,6 +8,7 @@ import AdminDashboard from "../pages/AdminDashboard";
 import AnomalyBar from "./AnomalyBar";
 import AnomalyLineChart from "./AnomalyLineChart";
 import AnomalyPie from "./AnomalyPie";
+import BehaviorProfile from "./BehaviorProfile";
 import DataTable from "./DataTable";
 import HeatmapViewer from "./HeatmapViewer";
 import Home from "./Home";
@@ -21,6 +22,7 @@ import SessionReplay from "./SessionReplay";
 import StatsCard from "./StatsCard";
 import Unauthorized from "./Unauthorized";
 import Upload from "./Upload";
+
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 const WS_BASE = import.meta.env.VITE_WS_BASE ?? "ws://localhost:8000";
@@ -296,6 +298,8 @@ export default function App() {
         <Route path="/replay" element={<SessionReplay />} />
         <Route path="/session" element={<SessionReplay />} />
         <Route path="/flow" element={<PathFlowChart />} />
+        <Route path="/profile" element={<BehaviorProfile />} />
+
       </Routes>
     </div>
   );
