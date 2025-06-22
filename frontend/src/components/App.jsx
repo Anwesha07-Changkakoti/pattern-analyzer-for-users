@@ -60,30 +60,45 @@ export default function App() {
 
   // rrweb session recorder with full snapshot + interval
   useEffect(() => {
-    const events = [];
-    const stop = record({
-      emit: (event) => events.push(event),
-      recordCanvas: true,
-    });
+  const events = [];
 
-    const sendEvents = () => {
-      if (events.length === 0) return;
-      const blob = new Blob([JSON.stringify({ events })], {
-        type: "application/json",
-      });
-      navigator.sendBeacon(`${API_BASE}/session`, blob);
-    };
+  const stop = record({
+    emit: (event) => events.push(event),
+    recordCanvas: true,
+  });
 
-    const intervalId = setInterval(sendEvents, 10000);
-    window.addEventListener("beforeunload", sendEvents);
+  // ✅ Force an initial full snapshot
+  if (typeof record.takeFullSnapshot === "function") {
+    record.takeFullSnapshot();
+  }
 
-    return () => {
-      stop();
-      sendEvents();
-      clearInterval(intervalId);
-      window.removeEventListener("beforeunload", sendEvents);
-    };
-  }, []);
+  const flush = () => {
+    if (events.length === 0) return;
+
+    // ⚠️ Only send if we have at least one full snapshot (type:2)
+    if (!events.some((e) => e.type === 2)) {
+      console.warn("No full snapshot – session not sent");
+      return;
+    }
+
+    navigator.sendBeacon(
+      `${API_BASE}/session`,
+      new Blob([JSON.stringify({ events })], { type: "application/json" })
+    );
+    events.length = 0;          // ✅ clear after sending
+  };
+
+  const timer = setInterval(flush, 10000);
+  window.addEventListener("beforeunload", flush);
+
+  return () => {
+    stop();
+    flush();
+    clearInterval(timer);
+    window.removeEventListener("beforeunload", flush);
+  };
+}, []);
+
 
   useEffect(() => {
     fetch(`${API_BASE}/path`, {
