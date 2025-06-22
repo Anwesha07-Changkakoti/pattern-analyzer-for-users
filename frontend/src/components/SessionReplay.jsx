@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Replayer } from "rrweb";
 
-// ✅ Load API base URL from .env
-const API_BASE = import.meta.env.VITE_API_BASE;
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
 export default function SessionReplay() {
   const containerRef = useRef(null);
@@ -16,13 +15,11 @@ export default function SessionReplay() {
         if (!res.ok) throw new Error("Failed to fetch session data");
 
         const data = await res.json();
-
         if (!data?.events || data.events.length === 0) {
           setError("No session data found.");
           return;
         }
 
-        // ✅ Initialize rrweb player
         new Replayer(data.events, {
           root: containerRef.current,
           showDebug: false,
@@ -39,11 +36,10 @@ export default function SessionReplay() {
   }, []);
 
   return (
-    <div className="mt-8 text-white">
-      <h2 className="text-xl font-semibold mb-2 text-cybergreen">📹 Session Playback</h2>
-      {loading && <p className="text-yellow-300">Loading session...</p>}
+    <div className="mt-8">
+      <h2 className="text-xl font-semibold mb-2">Session Playback</h2>
+      {loading && <p>Loading session...</p>}
       {error && <p className="text-red-500">{error}</p>}
-
       <div
         ref={containerRef}
         style={{
