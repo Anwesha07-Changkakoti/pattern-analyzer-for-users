@@ -58,37 +58,29 @@ export default function App() {
     return () => document.removeEventListener("click", handleClick);
   }, [location.pathname, user]);
 
-  // ✅ Updated rrweb recorder with full snapshot flush
+  // rrweb session recorder with full snapshot + interval
   useEffect(() => {
     const events = [];
-
     const stop = record({
-      emit: (event) => {
-        events.push(event);
-        if (event.type === 2) {
-          const blob = new Blob([JSON.stringify({ events })], {
-            type: "application/json",
-          });
-          navigator.sendBeacon(`${API_BASE}/session`, blob);
-        }
-      },
+      emit: (event) => events.push(event),
       recordCanvas: true,
     });
 
     const sendEvents = () => {
-      if (events.length > 0) {
-        const blob = new Blob([JSON.stringify({ events })], {
-          type: "application/json",
-        });
-        navigator.sendBeacon(`${API_BASE}/session`, blob);
-      }
+      if (events.length === 0) return;
+      const blob = new Blob([JSON.stringify({ events })], {
+        type: "application/json",
+      });
+      navigator.sendBeacon(`${API_BASE}/session`, blob);
     };
 
+    const intervalId = setInterval(sendEvents, 10000);
     window.addEventListener("beforeunload", sendEvents);
 
     return () => {
       stop();
       sendEvents();
+      clearInterval(intervalId);
       window.removeEventListener("beforeunload", sendEvents);
     };
   }, []);
