@@ -19,6 +19,7 @@ class AnalysisResult(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String, ForeignKey("users.uid"))
+    file_id = Column(String, unique=True, index=True)  # ✅ Unique file identifier
     file_name = Column(String)
     total_records = Column(Integer)
     anomaly_count = Column(Integer)

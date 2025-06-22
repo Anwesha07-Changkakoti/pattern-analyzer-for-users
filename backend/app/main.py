@@ -232,4 +232,4 @@ async def get_path_flow():
         for (source, target), count in transitions.items()
     ]
 
-    return {"nodes": nodes, "links": links}
+    return {"nodes": nodes, "links": links}   
