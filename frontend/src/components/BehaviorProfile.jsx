@@ -5,10 +5,14 @@ export default function BehaviorProfile() {
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
-    axios.get("/api/profile")
-      .then(res => setProfile(res.data))
-      .catch(err => console.error("Failed to fetch behavior profile", err));
-  }, []);
+  axios.get("/api/profile")
+    .then(res => {
+      console.log("Profile data received:", res.data);  // ✅ ADD THIS
+      setProfile(res.data);
+    })
+    .catch(err => console.error("Failed to fetch behavior profile", err));
+}, []);
+
 
   if (!profile) return <div>Loading profile...</div>;
 
