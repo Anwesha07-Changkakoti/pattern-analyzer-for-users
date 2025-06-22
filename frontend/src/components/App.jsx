@@ -1,7 +1,7 @@
 import axios from "axios";
 import { useEffect, useRef, useState } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
-import { record, snapshot } from "rrweb";
+import { record } from "rrweb"; // ✅ Only import 'record' from rrweb
 
 import { useAuth } from "../contexts/AuthContext";
 import AdminDashboard from "../pages/AdminDashboard";
@@ -37,7 +37,6 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [fileId, setFileId] = useState(null);
 
-  // ✅ 1. Click Tracker (Heatmap)
   useEffect(() => {
     const allowedPaths = ["/", "/heatmap", "/history"];
     if (!allowedPaths.includes(location.pathname) || !user) return;
@@ -60,34 +59,26 @@ export default function App() {
   }, [location.pathname, user]);
 
   // ✅ 2. rrweb Session Recorder (Fixed)
+  useEffect(() => {
+    const events = [];
+    const stop = record({ emit: (event) => events.push(event) });
 
-useEffect(() => {
-  const events = [];
-  const stop = record({ emit: (event) => events.push(event) });
+    const sendEvents = () => {
+      const blob = new Blob([JSON.stringify({ events })], {
+        type: "application/json",
+      });
+      navigator.sendBeacon(`${API_BASE}/session`, blob);
+    };
 
-  // Force one snapshot 2s after recording starts
-  setTimeout(() => {
-    snapshot((snapEvent) => events.push(snapEvent));
-  }, 2000);
+    window.addEventListener("beforeunload", sendEvents);
 
-  const sendEvents = () => {
-    const blob = new Blob([JSON.stringify({ events })], {
-      type: "application/json",
-    });
-    navigator.sendBeacon(`${API_BASE}/session`, blob);
-  };
+    return () => {
+      stop();
+      sendEvents();
+      window.removeEventListener("beforeunload", sendEvents);
+    };
+  }, []);
 
-  window.addEventListener("beforeunload", sendEvents);
-
-  return () => {
-    stop();
-    sendEvents();
-    window.removeEventListener("beforeunload", sendEvents);
-  };
-}, []);
-
-
-  // ✅ 3. Path Tracker
   useEffect(() => {
     fetch(`${API_BASE}/path`, {
       method: "POST",
@@ -99,7 +90,6 @@ useEffect(() => {
     });
   }, [location]);
 
-  // Auth Header
   const authHeader = async () => {
     if (!user) return {};
     const token = await user.getIdToken();
@@ -171,7 +161,6 @@ useEffect(() => {
     return () => clearInterval(id);
   }, [fullBatch]);
 
-  // ✅ 4. WebSocket Stream (unchanged)
   const wsRef = useRef(null);
   useEffect(() => {
     if (authLoading) return;
@@ -256,11 +245,7 @@ useEffect(() => {
                 <AnomalyBar summary={summary} />
               </div>
               <AnomalyLineChart data={lineChartData} />
-              <DataTable
-                rows={batchRows}
-                title="Batch Results (streamed)"
-                height={400}
-              />
+              <DataTable rows={batchRows} title="Batch Results (streamed)" height={400} />
 
               {fileId && (
                 <button
@@ -282,23 +267,9 @@ useEffect(() => {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
-        <Route
-          path="/upload"
-          element={
-            <ProtectedRoute>
-              <Upload />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
         <Route path="/history" element={<ResultsHistory />} />
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute role="admin">
-              <AdminDashboard />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/admin" element={<ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>} />
         <Route path="/unauthorized" element={<Unauthorized />} />
         <Route path="/heatmap" element={<HeatmapViewer />} />
         <Route path="/replay" element={<SessionReplay />} />
