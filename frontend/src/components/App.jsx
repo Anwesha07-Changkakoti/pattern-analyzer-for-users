@@ -37,7 +37,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [fileId, setFileId] = useState(null);
 
-  // ✅ 1. Click Tracker (Heatmap) — only on selected pages
+  // ✅ 1. Click Tracker (Heatmap)
   useEffect(() => {
     const allowedPaths = ["/", "/heatmap", "/history"];
     if (!allowedPaths.includes(location.pathname) || !user) return;
@@ -59,7 +59,7 @@ export default function App() {
     return () => document.removeEventListener("click", handleClick);
   }, [location.pathname, user]);
 
-  // 2. rrweb Session Recorder
+  // ✅ 2. rrweb Session Recorder
   useEffect(() => {
     const events = [];
     const stop = record({ emit: (event) => events.push(event) });
@@ -73,12 +73,19 @@ export default function App() {
     };
 
     window.addEventListener("beforeunload", () => {
-  const blob = new Blob([JSON.stringify({ events })], { type: "application/json" });
-  navigator.sendBeacon(`${API_BASE}/session`, blob);
-});
+      const blob = new Blob([JSON.stringify({ events })], {
+        type: "application/json",
+      });
+      navigator.sendBeacon(`${API_BASE}/session`, blob);
+    });
 
+    return () => {
+      stop();
+      sendEvents();
+    };
+  }, []);
 
-  // 3. Path Navigation Tracker
+  // ✅ 3. Path Tracker
   useEffect(() => {
     fetch(`${API_BASE}/path`, {
       method: "POST",
@@ -264,7 +271,7 @@ export default function App() {
           )}
 
           <h2 className="text-2xl font-bold">Real‑Time Stream</h2>
-          <DataTable rows={liveRows} title="Live Logs (last 100)" height={300} />
+          <DataTable rows={liveRows} title="Live Logs (last 100)" height={300} />
           <LiveBarChart dataStream={liveRows} />
         </div>
       )}
