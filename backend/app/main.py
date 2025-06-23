@@ -67,7 +67,7 @@ app.add_middleware(
 
 app.include_router(results_router)
 app.include_router(session_router)
-app.include_router(profile_router) 
+app.include_router(profile_router)
 
 @app.post("/upload-click-logs")
 async def upload_click_logs(file: UploadFile = File(...), user: Dict = Depends(get_current_user)):

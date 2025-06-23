@@ -6,7 +6,7 @@ from app.utils.firebase_auth import get_current_user
 
 router = APIRouter(prefix="/profile", tags=["Behavior"])
 
-@router.get("")
+@router.get("/")
 def get_profile(user=Depends(get_current_user), db: Session = Depends(get_db)):
     profile = db.query(UserBehaviorProfile).filter_by(user_id=user["uid"]).first()
     if not profile:
