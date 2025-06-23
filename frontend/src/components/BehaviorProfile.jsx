@@ -3,12 +3,8 @@ import { getAuth } from "firebase/auth";
 import html2pdf from "html2pdf.js";
 import { useEffect, useState } from "react";
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis, YAxis
+  Bar, BarChart, CartesianGrid, Line, LineChart,
+  ResponsiveContainer, Tooltip, XAxis, YAxis
 } from "recharts";
 
 export default function BehaviorProfile() {
@@ -64,6 +60,16 @@ export default function BehaviorProfile() {
     { name: "Session Duration (s)", value: profile.avg_session_duration },
   ];
 
+  const weeklySessions = [
+    { day: "Mon", duration: 620 },
+    { day: "Tue", duration: 480 },
+    { day: "Wed", duration: 550 },
+    { day: "Thu", duration: 600 },
+    { day: "Fri", duration: 720 },
+    { day: "Sat", duration: 840 },
+    { day: "Sun", duration: 500 },
+  ];
+
   const exportPDF = () => {
     const element = document.getElementById("profile-section");
     html2pdf().from(element).save("behavior-profile.pdf");
@@ -84,7 +90,7 @@ export default function BehaviorProfile() {
           <li><strong>Active Weekdays:</strong> {formattedWeekdays || "N/A"}</li>
         </ul>
 
-        {/* Chart */}
+        {/* Bar Chart */}
         <div className="mt-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-2">Behavior Overview</h3>
           <ResponsiveContainer width="100%" height={250}>
@@ -95,6 +101,20 @@ export default function BehaviorProfile() {
               <Tooltip />
               <Bar dataKey="value" fill="#6366f1" />
             </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Line Chart */}
+        <div className="mt-10">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">Weekly Session Duration</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={weeklySessions} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="day" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="duration" stroke="#10b981" strokeWidth={2} />
+            </LineChart>
           </ResponsiveContainer>
         </div>
       </div>
