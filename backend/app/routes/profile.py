@@ -7,16 +7,16 @@ from app.utils.firebase_auth import get_current_user
 from app.utils.session_tracker import start_session, end_session
 import time
 
-router = APIRouter(prefix="/profile", tags=["Behavior"])
+profile_router = APIRouter(prefix="/profile", tags=["Behavior"])
 
-@router.get("/track")
+@profile_router.get("/track")
 def simulate_session(db: Session = Depends(get_db), user=Depends(get_current_user)):
     session_data = start_session(user["uid"])
     time.sleep(2.5)
     end_session(db, session_data)
     return {"message": "Session tracked"}
 
-@router.get("/")
+@profile_router.get("/")
 def get_profile(user=Depends(get_current_user), db: Session = Depends(get_db)):
     profile = db.query(UserBehaviorProfile).filter_by(user_id=user["uid"]).first()
     if not profile:
@@ -30,7 +30,7 @@ def get_profile(user=Depends(get_current_user), db: Session = Depends(get_db)):
         "weekdays_active": profile.weekdays_active,
     }
 
-@router.get("/session-trend")
+@profile_router.get("/session-trend")
 def get_session_trend(user=Depends(get_current_user), db: Session = Depends(get_db)):
     user_id = user["uid"]
     query = text("""

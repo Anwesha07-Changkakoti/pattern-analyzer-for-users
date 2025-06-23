@@ -1,23 +1,51 @@
+# app/utils/session_tracker.py
+import time
 from datetime import datetime
-from sqlalchemy.orm import Session
-from app.models import Session as UserSession
+from typing import Dict
 
-# Store login time when user starts
-def start_session(user_id: str):
-    return {
+# Temporary in-memory store (replace with Redis or DB for production)
+active_sessions: Dict[str, Dict] = {}
+
+def start_session(user_id: str) -> str:
+    """
+    Starts a session and stores it in active_sessions.
+    Returns a session_id.
+    """
+    session_id = f"{user_id}-{int(time.time())}"
+    active_sessions[session_id] = {
         "user_id": user_id,
-        "start_time": datetime.utcnow()
+        "start_time": datetime.utcnow(),
     }
+    return session_id
 
-# End session and store it
-def end_session(db: Session, session_data: dict):
+def end_session(db, session_id: str) -> Dict:
+    """
+    Ends a session, calculates duration, and writes to DB.
+    """
+    session = active_sessions.pop(session_id, None)
+    if not session:
+        raise ValueError("Session not found")
+
     end_time = datetime.utcnow()
-    duration = (end_time - session_data["start_time"]).total_seconds()
+    duration = (end_time - session["start_time"]).total_seconds()
 
-    session = UserSession(
-        user_id=session_data["user_id"],
-        start_time=session_data["start_time"],
-        duration=duration
+    # Example: write to DB (replace with your ORM model)
+    db.execute(
+        """
+        INSERT INTO sessions (user_id, start_time, end_time, duration)
+        VALUES (:user_id, :start_time, :end_time, :duration)
+        """,
+        {
+            "user_id": session["user_id"],
+            "start_time": session["start_time"],
+            "end_time": end_time,
+            "duration": duration,
+        }
     )
-    db.add(session)
     db.commit()
+
+    return {"user_id": session["user_id"], "duration": duration}
+
+
+def get_active_sessions():
+    return active_sessions

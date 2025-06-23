@@ -26,7 +26,6 @@ from app.models import AnalysisResult
 from app.models import Base
 from app.database import engine
 from app.routes.results import router as results_router
-from app.routes.sessions import router as session_router 
 import logging
 import asyncio
 import datetime
@@ -36,7 +35,8 @@ from app.utils.firebase_auth import (
     get_current_user,
     get_current_user_optional_ws,
 )
-from app.routes.profile import router as profile_router
+from app.routes.profile import profile_router
+from app.routes.sessions import session_router
 
 
 Base.metadata.create_all(bind=engine)
