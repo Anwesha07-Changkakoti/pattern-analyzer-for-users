@@ -40,7 +40,7 @@ from app.routes.profile import profile_router
 from app.routes.sessions import session_router
 
 
-Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine, checkfirst=True)
 
 # Logging
 logger = logging.getLogger("user-pattern-analyzer")

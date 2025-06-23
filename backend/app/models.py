@@ -74,10 +74,10 @@ class UserSession(Base):
     
 class SessionModel(Base):
     __tablename__ = "sessions"
-    __table_args__ = {'extend_existing': True}  # ✅ Add this line
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, index=True)
-    session_id = Column(String)
-    start_time = Column(DateTime)
-    duration = Column(Float)
+    user_id = Column(String, nullable=False)
+    session_id = Column(String, nullable=False)
+    start_time = Column(DateTime, nullable=False)
+    duration = Column(Float, nullable=False)
