@@ -47,6 +47,7 @@ useEffect(() => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
+      console.log("Trend Data:", res.data); 
       setTrendData(res.data);
     } catch (err) {
       console.error("Failed to fetch session trend", err);
