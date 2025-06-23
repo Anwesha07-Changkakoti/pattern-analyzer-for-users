@@ -2,11 +2,19 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import get_db
-from app.models import UserBehaviorProfile, Session as UserSession  # ✅ Add Session model
+from app.models import UserBehaviorProfile, Session as UserSession
 from app.utils.firebase_auth import get_current_user
+from app.utils.session_tracker import start_session, end_session
+import time
 
 router = APIRouter(prefix="/profile", tags=["Behavior"])
 
+@router.get("/track")
+def simulate_session(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    session_data = start_session(user["uid"])
+    time.sleep(2.5)
+    end_session(db, session_data)
+    return {"message": "Session tracked"}
 
 @router.get("/")
 def get_profile(user=Depends(get_current_user), db: Session = Depends(get_db)):
@@ -22,16 +30,9 @@ def get_profile(user=Depends(get_current_user), db: Session = Depends(get_db)):
         "weekdays_active": profile.weekdays_active,
     }
 
-
 @router.get("/session-trend")
 def get_session_trend(user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """
-    Returns average session durations grouped by weekday
-    for use in time-series charts.
-    """
     user_id = user["uid"]
-
-    # SQLite version (change for PostgreSQL accordingly)
     query = text("""
         SELECT 
             strftime('%w', start_time) AS weekday,
@@ -41,13 +42,10 @@ def get_session_trend(user=Depends(get_current_user), db: Session = Depends(get_
         GROUP BY weekday
         ORDER BY weekday
     """)
-
     result = db.execute(query, {"user_id": user_id}).fetchall()
-
     weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     trend = [
         {"day": weekdays[int(row[0])], "duration": round(row[1], 2)}
         for row in result
     ]
-
     return trend
