@@ -13,8 +13,6 @@ export default function Navbar() {
           <>
             <Link to="/history" className="hover:underline">Past Results</Link>
             <Link to="/heatmap" className="hover:underline">Heatmap</Link>
-            <Link to="/session" className="hover:underline">Session Replay</Link>
-            <Link to="/pathflow" className="hover:underline">Path Flow</Link>
             <Link to="/profile" className="hover:underline text-blue-400 font-medium">Behavior Profile</Link> {/* ✅ New Line */}
           </>
         )}
