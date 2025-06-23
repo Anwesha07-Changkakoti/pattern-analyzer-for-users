@@ -9,6 +9,7 @@ import {
 
 export default function BehaviorProfile() {
   const [profile, setProfile] = useState(null);
+  const [trendData, setTrendData] = useState([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -16,21 +17,16 @@ export default function BehaviorProfile() {
       try {
         const auth = getAuth();
         const user = auth.currentUser;
-
         if (!user) {
           setError("User not logged in");
           return;
         }
-
         const token = await user.getIdToken();
 
         const res = await axios.get(`${import.meta.env.VITE_API_BASE}/profile/`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
 
-        console.log("Profile data received:", res.data);
         setProfile(res.data);
       } catch (err) {
         setError("Failed to fetch behavior profile");
@@ -38,8 +34,32 @@ export default function BehaviorProfile() {
       }
     };
 
+    const fetchTrend = async () => {
+      try {
+        const auth = getAuth();
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const token = await user.getIdToken();
+
+        const res = await axios.get(`${import.meta.env.VITE_API_BASE}/profile/session-trend`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        setTrendData(res.data);
+      } catch (err) {
+        console.error("Failed to fetch session trend", err);
+      }
+    };
+
     fetchProfile();
+    fetchTrend();
   }, []);
+
+  const exportPDF = () => {
+    const element = document.getElementById("profile-section");
+    html2pdf().from(element).save("behavior-profile.pdf");
+  };
 
   if (error) return <div className="text-center text-red-500 mt-8">{error}</div>;
   if (!profile) return <div className="text-center text-gray-500 mt-8">Loading profile...</div>;
@@ -59,21 +79,6 @@ export default function BehaviorProfile() {
     { name: "Files/Day", value: profile.avg_files_accessed },
     { name: "Session Duration (s)", value: profile.avg_session_duration },
   ];
-
-  const weeklySessions = [
-    { day: "Mon", duration: 620 },
-    { day: "Tue", duration: 480 },
-    { day: "Wed", duration: 550 },
-    { day: "Thu", duration: 600 },
-    { day: "Fri", duration: 720 },
-    { day: "Sat", duration: 840 },
-    { day: "Sun", duration: 500 },
-  ];
-
-  const exportPDF = () => {
-    const element = document.getElementById("profile-section");
-    html2pdf().from(element).save("behavior-profile.pdf");
-  };
 
   return (
     <div className="p-6 max-w-xl mx-auto mt-10">
@@ -105,18 +110,20 @@ export default function BehaviorProfile() {
         </div>
 
         {/* Line Chart */}
-        <div className="mt-10">
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">Weekly Session Duration</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={weeklySessions} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="day" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="duration" stroke="#10b981" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        {trendData.length > 0 && (
+          <div className="mt-10">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Weekly Session Duration</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={trendData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" />
+                <YAxis />
+                <Tooltip />
+                <Line type="monotone" dataKey="duration" stroke="#10b981" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       {/* Export Button */}
