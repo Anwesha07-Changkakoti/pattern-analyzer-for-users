@@ -11,64 +11,61 @@ export default function BehaviorProfile() {
   const [profile, setProfile] = useState(null);
   const [trendData, setTrendData] = useState([]);
   const [error, setError] = useState("");
-useEffect(() => {
-  const fetchProfile = async () => {
-    try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) {
-        setError("User not logged in");
-        return;
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const auth = getAuth();
+        const user = auth.currentUser;
+        if (!user) {
+          setError("User not logged in");
+          return;
+        }
+        const token = await user.getIdToken();
+
+        const res = await axios.get(`${import.meta.env.VITE_API_BASE}/profile/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        setProfile(res.data);
+      } catch (err) {
+        setError("Failed to fetch behavior profile");
+        console.error(err);
       }
-      const token = await user.getIdToken();
+    };
 
-      // ✅ CORRECT: get the actual profile
-      const res = await axios.get(`${import.meta.env.VITE_API_BASE}/profile/`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    const fetchTrend = async () => {
+      try {
+        const auth = getAuth();
+        const user = auth.currentUser;
+        if (!user) return;
 
-      setProfile(res.data);
-    } catch (err) {
-      setError("Failed to fetch behavior profile");
-      console.error(err);
-    }
-  };
+        const token = await user.getIdToken();
 
-  const fetchTrend = async () => {
-    try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) return;
+        const res = await axios.get(`${import.meta.env.VITE_API_BASE}/profile/session-trend`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-      const token = await user.getIdToken();
+        setTrendData(res.data);
+      } catch (err) {
+        console.error("Failed to fetch session trend", err);
+      }
+    };
 
-      // ✅ CORRECT: get the trend graph data
-      const res = await axios.get(`${import.meta.env.VITE_API_BASE}/profile/session-trend`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      console.log("Trend Data:", res.data); 
-      setTrendData(res.data);
-    } catch (err) {
-      console.error("Failed to fetch session trend", err);
-    }
-  };
-
-  fetchProfile();
-  fetchTrend();
-}, []);
-
+    fetchProfile();
+    fetchTrend();
+  }, []);
 
   const exportPDF = () => {
     const element = document.getElementById("profile-section");
     html2pdf().from(element).save("behavior-profile.pdf");
   };
 
-  if (error) return <div className="text-center text-red-500 mt-8">{error}</div>;
-  if (!profile) return <div className="text-center text-gray-500 mt-8">Loading profile...</div>;
-
   const safe = (val, decimals = 2) =>
     typeof val === "number" ? val.toFixed(decimals) : "N/A";
+
+  if (error) return <div className="text-center text-red-500 mt-8">{error}</div>;
+  if (!profile) return <div className="text-center text-gray-500 mt-8">Loading profile...</div>;
 
   const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const formattedWeekdays = (profile.weekdays_active || "")
@@ -113,19 +110,22 @@ useEffect(() => {
         </div>
 
         {/* Line Chart */}
-        {trendData.length > 0 && (
+        {Array.isArray(trendData) && trendData.length > 0 && (
           <div className="mt-10">
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Weekly Session Duration</h3>
             <ResponsiveContainer width="100%" height={250}>
-             <LineChart data={trendData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-               <CartesianGrid strokeDasharray="3 3" />
-               <XAxis dataKey="day" />
-               <YAxis />
+              <LineChart data={trendData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" />
+                <YAxis />
                 <Tooltip />
-                 <Line type="monotone" dataKey="duration" stroke="#10b981" strokeWidth={2} />
-                 </LineChart>
-
-
+                <Line
+                  type="monotone"
+                  dataKey="duration"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                />
+              </LineChart>
             </ResponsiveContainer>
           </div>
         )}
