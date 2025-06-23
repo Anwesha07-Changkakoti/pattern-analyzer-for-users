@@ -62,7 +62,7 @@ class UserBehaviorProfile(Base):
 # ---------------------------------------------------------------------
 # Per-session tracking (used for trend analysis)
 # ---------------------------------------------------------------------
-class Session(Base):
+class UserSession(Base):
     __tablename__ = "sessions"
 
     id         = Column(Integer, primary_key=True, index=True)

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import get_db
-from app.models import UserBehaviorProfile, Session as UserSession
+from app.models import UserBehaviorProfile, UserSession
 from app.utils.firebase_auth import get_current_user
 from app.utils.session_tracker import start_session, end_session
 import time
