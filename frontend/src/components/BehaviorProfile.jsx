@@ -117,12 +117,18 @@ useEffect(() => {
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Weekly Session Duration</h3>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={trendData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="day" />
-                <YAxis />
-                <Tooltip />
-                <Line type="monotone" dataKey="duration" stroke="#10b981" strokeWidth={2} />
+               <CartesianGrid strokeDasharray="3 3" />
+               <XAxis 
+                   dataKey="date" 
+                  tickFormatter={(value) => 
+                    new Date(value).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' })
+    } 
+  />
+            <YAxis />
+             <Tooltip />
+             <Line type="monotone" dataKey="avg_duration" stroke="#10b981" strokeWidth={2} />
               </LineChart>
+
             </ResponsiveContainer>
           </div>
         )}
