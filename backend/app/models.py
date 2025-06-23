@@ -59,3 +59,15 @@ class UserBehaviorProfile(Base):
     last_updated        = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="behavior_profile")
+# ---------------------------------------------------------------------
+# Per-session tracking (used for trend analysis)
+# ---------------------------------------------------------------------
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    user_id    = Column(String, ForeignKey("users.uid"))
+    start_time = Column(DateTime)  # login timestamp
+    duration   = Column(Float)     # session duration in seconds
+
+    user = relationship("User")  # optional, if needed for joins

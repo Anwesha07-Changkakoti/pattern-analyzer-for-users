@@ -32,6 +32,15 @@ def extract_behavior_features(logs_df: pd.DataFrame, user_id: str) -> dict:
     top_file_types = logs_df["file_type"].value_counts().head(3).index.tolist()
     top_regions = logs_df["ip_region"].value_counts().head(3).index.tolist()
     active_days = logs_df["weekday"].value_counts().head(3).index.tolist()
+    session_trend = (
+        logs_df.groupby(logs_df["timestamp"].dt.strftime("%Y-%m-%d"))["duration"]
+        .mean()
+        .reset_index()
+        .rename(columns={"duration": "avg_duration", "timestamp": "date"})
+    )
+
+    print("Session Trend Preview:")
+    print(session_trend.head())
 
     return {
         "user_id": user_id,
