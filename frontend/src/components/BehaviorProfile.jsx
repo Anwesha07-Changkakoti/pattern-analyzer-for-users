@@ -1,18 +1,39 @@
 import axios from "axios";
+import { getAuth } from "firebase/auth";
 import { useEffect, useState } from "react";
 
 export default function BehaviorProfile() {
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
-  axios.get(`${import.meta.env.VITE_API_BASE}/profile/`)
-    .then(res => {
-      console.log("Profile data received:", res.data);  // ✅ ADD THIS
-      setProfile(res.data);
-    })
-    .catch(err => console.error("Failed to fetch behavior profile", err));
-}, []);
+  const fetchProfile = async () => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
 
+      if (!user) {
+        console.error("User not logged in");
+        return;
+      }
+
+      const token = await user.getIdToken();
+
+      const res = await axios.get(`${import.meta.env.VITE_API_BASE}/profile/`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      console.log("Profile data received:", res.data);
+      setProfile(res.data);
+
+    } catch (err) {
+      console.error("Failed to fetch behavior profile", err);
+    }
+  };
+
+  fetchProfile();
+}, []);
 
   if (!profile) return <div>Loading profile...</div>;
 
