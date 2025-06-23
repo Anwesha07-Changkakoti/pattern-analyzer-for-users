@@ -20,6 +20,7 @@ from app.services.ml_model import detect_anomalies
 from app.services.feature_engineering import preprocess
 from app.services.behavior_profile import extract_behavior_features
 from app.services.profile_updater import upsert_behavior_profile
+from app.services.session_utils import store_session_data  # create this file if not already
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import AnalysisResult
@@ -113,7 +114,7 @@ async def analyze(
     db:  Session     = Depends(get_db),
 ):
     raw_bytes = await file.read()
-    filename   = file.filename or "uploaded"
+    filename = file.filename or "uploaded"
 
     try:
         if filename.endswith(".json"):
@@ -132,9 +133,20 @@ async def analyze(
         return_reasons=True,
     )
 
-    df_out               = df_raw.copy()
-    df_out["anomaly"]    = preds
+    df_out = df_raw.copy()
+    df_out["anomaly"] = preds
     df_out["anomaly_reason"] = reasons
+
+    # ✅ Store session data (loop through each row)
+    for _, row in df_out.iterrows():
+        session_id = row.get("session_id")
+        timestamp = row.get("timestamp")
+        try:
+            duration = float(row.get("duration", 0))
+        except:
+            duration = 0
+        if session_id and timestamp:
+            store_session_data(db, user["uid"], session_id, timestamp, duration)
 
     summary = {
         "total":      len(df_out),
@@ -164,9 +176,9 @@ async def analyze(
 
     db.commit()
 
-    df_json_safe  = df_out.replace({np.nan: None}).to_dict(orient="records")
-    numeric_cols  = df_out.select_dtypes(include="number").columns.tolist()
-    x_col, y_col  = numeric_cols[:2] if len(numeric_cols) >= 2 else (None, None)
+    df_json_safe = df_out.replace({np.nan: None}).to_dict(orient="records")
+    numeric_cols = df_out.select_dtypes(include="number").columns.tolist()
+    x_col, y_col = numeric_cols[:2] if len(numeric_cols) >= 2 else (None, None)
     heatmap_points = (
         df_out[df_out["anomaly"] == 1][[x_col, y_col]].dropna().values.tolist()
         if x_col and y_col else []

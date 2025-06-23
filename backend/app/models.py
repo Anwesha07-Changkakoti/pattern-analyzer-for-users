@@ -71,3 +71,13 @@ class UserSession(Base):
     duration   = Column(Float)     # session duration in seconds
 
     user = relationship("User")  # optional, if needed for joins
+    
+class SessionModel(Base):
+    __tablename__ = "sessions"
+    __table_args__ = {'extend_existing': True}  # ✅ Add this line
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True)
+    session_id = Column(String)
+    start_time = Column(DateTime)
+    duration = Column(Float)
