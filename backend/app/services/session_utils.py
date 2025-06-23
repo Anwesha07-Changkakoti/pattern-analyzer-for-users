@@ -1,5 +1,5 @@
 from datetime import datetime
-from app.models import SessionModel
+from app.models import UserSession
 
 
 def store_session_data(db, user_id, session_id, timestamp, duration):
