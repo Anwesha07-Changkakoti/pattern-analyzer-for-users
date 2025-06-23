@@ -11,50 +11,52 @@ export default function BehaviorProfile() {
   const [profile, setProfile] = useState(null);
   const [trendData, setTrendData] = useState([]);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const auth = getAuth();
-        const user = auth.currentUser;
-        if (!user) {
-          setError("User not logged in");
-          return;
-        }
-        const token = await user.getIdToken();
-
-        const res = await axios.get(`${import.meta.env.VITE_API_BASE}/profile/session-trend`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        setProfile(res.data);
-      } catch (err) {
-        setError("Failed to fetch behavior profile");
-        console.error(err);
+useEffect(() => {
+  const fetchProfile = async () => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) {
+        setError("User not logged in");
+        return;
       }
-    };
+      const token = await user.getIdToken();
 
-    const fetchTrend = async () => {
-      try {
-        const auth = getAuth();
-        const user = auth.currentUser;
-        if (!user) return;
+      // ✅ CORRECT: get the actual profile
+      const res = await axios.get(`${import.meta.env.VITE_API_BASE}/profile/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-        const token = await user.getIdToken();
+      setProfile(res.data);
+    } catch (err) {
+      setError("Failed to fetch behavior profile");
+      console.error(err);
+    }
+  };
 
-        const res = await axios.get(`${import.meta.env.VITE_API_BASE}/profile/`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+  const fetchTrend = async () => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) return;
 
-        setTrendData(res.data);
-      } catch (err) {
-        console.error("Failed to fetch session trend", err);
-      }
-    };
+      const token = await user.getIdToken();
 
-    fetchProfile();
-    fetchTrend();
-  }, []);
+      // ✅ CORRECT: get the trend graph data
+      const res = await axios.get(`${import.meta.env.VITE_API_BASE}/profile/session-trend`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setTrendData(res.data);
+    } catch (err) {
+      console.error("Failed to fetch session trend", err);
+    }
+  };
+
+  fetchProfile();
+  fetchTrend();
+}, []);
+
 
   const exportPDF = () => {
     const element = document.getElementById("profile-section");
