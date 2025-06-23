@@ -42,7 +42,7 @@ export default function BehaviorProfile() {
 
         const token = await user.getIdToken();
 
-        const res = await axios.get(`${import.meta.env.VITE_API_BASE}/profile/session-trend`, {
+        const res = await axios.get(`${import.meta.env.VITE_API_BASE}/profile/`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
