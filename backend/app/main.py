@@ -4,6 +4,7 @@ import os
 import socketio
 from socketio import ASGIApp
 
+from fastapi.responses import JSONResponse
 from fastapi import FastAPI, UploadFile, File, Depends, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -69,6 +70,19 @@ sio = socketio.AsyncServer(
 
 # Wrap with Socket.IO ASGI App
 app = ASGIApp(sio, other_asgi_app=fastapi_app)
+
+
+@fastapi_app.options("/{full_path:path}")
+async def preflight_handler(full_path: str, request: Request):
+    response = JSONResponse(content={"message": "CORS preflight"})
+    response.headers["Access-Control-Allow-Origin"] = request.headers.get("origin", "*")
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
+    response.headers["Access-Control-Allow-Headers"] = request.headers.get(
+        "Access-Control-Request-Headers", "*"
+    )
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
 
 @fastapi_app.middleware("http")
 async def log_request_data(request: Request, call_next):
