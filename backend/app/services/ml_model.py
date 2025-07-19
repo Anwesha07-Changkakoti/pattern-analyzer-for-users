@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import hashlib
 import logging
+import os
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
@@ -17,6 +18,8 @@ from app.database import SessionLocal
 from app.models import AnalysisResult
 from app.services.behavior_profile import extract_behavior_features_from_activity
 from app.services.profile_updater import upsert_behavior_profile
+
+os.makedirs("logs", exist_ok=True)
 
 # Logging config
 logging.basicConfig(
