@@ -1,0 +1,28 @@
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# Logs and DBs
+*.log
+*.db
+
+# Environment and secrets
+.env
+*.env
+serviceAccountKey.json
+
+# System files
+.DS_Store
+Thumbs.db
+
+# VSCode settings (optional)
+.vscode/
+
+# Jupyter Notebook checkpoints (if used)
+.ipynb_checkpoints/

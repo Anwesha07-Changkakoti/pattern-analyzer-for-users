@@ -1,0 +1,2 @@
+col_0,Destination Port,NAT Source Port,NAT Destination Port,Action,Bytes,Bytes Sent,Bytes Received,Packets,Elapsed Time (sec),pkts_sent,col_11,anomaly,anomaly_reason
+51465,443,30986,443,deny,3961,1595.0,2366,21,16,12.0,9.0,1,"High deviation in: 120 (z=149205483.50), 348 (z=143862284.72), 405 (z=124268223.53) | Semantic anomaly focus: deny"
