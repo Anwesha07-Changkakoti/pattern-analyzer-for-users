@@ -1,36 +1,61 @@
-import axios from "axios";
+import { onAuthStateChanged } from "firebase/auth";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { useEffect, useState } from "react";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { Bar, BarChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { auth } from "../firebase/firebaseConfig";
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { auth } from "../firebase";
 
+const COLORS = ["#00C49F", "#FFBB28", "#FF8042", "#8884d8", "#0088FE"];
 
-const BehaviorProfile = () => {
-  const [user] = useAuthState(auth);
+export default function BehaviorProfile() {
   const [profile, setProfile] = useState(null);
-  const [error, setError] = useState("");
+  const [user, setUser] = useState(null);
 
+  // Listen to auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch behavior profile once user is available
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         const token = await user.getIdToken();
 
-        // ✅ Fixed: Use the correct working endpoint
-        const res = await axios.get(
-          `${import.meta.env.VITE_API_BASE}/api/profile/stats`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        // Step 1: POST to update behavior profile from activity
+        await fetch("http://localhost:8000/api/profile/update-from-activity", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-        setProfile(res.data);
-      } catch (err) {
-        console.error(err);
-        setError("Failed to fetch profile.");
+        // Step 2: GET the profile data
+        const res = await fetch("http://localhost:8000/api/profile", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await res.json();
+        setProfile(data);
+      } catch (error) {
+        console.error("Error loading behavior profile:", error);
       }
     };
 
@@ -39,77 +64,92 @@ const BehaviorProfile = () => {
     }
   }, [user]);
 
-  const exportToPDF = () => {
-    const input = document.getElementById("profile-content");
+  const exportAsPDF = () => {
+    const input = document.getElementById("profile-chart");
     html2canvas(input).then((canvas) => {
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF();
-      const imgWidth = 190;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      pdf.addImage(imgData, "PNG", 10, 10, imgWidth, imgHeight);
+      pdf.addImage(imgData, "PNG", 10, 10, 190, 0);
       pdf.save("behavior-profile.pdf");
     });
   };
 
-  if (error) {
-    return <div className="text-red-500 text-center mt-10">{error}</div>;
-  }
-
-  if (!profile) {
-    return <div className="text-white text-center mt-10">Loading profile...</div>;
-  }
-
-  // Recharts expects data as array of objects
-  const barData = [
-    {
-      name: "Login Hour",
-      value: profile.avg_login_hour,
-    },
-    {
-      name: "Files Accessed",
-      value: profile.avg_files_accessed,
-    },
-    {
-      name: "Session Duration",
-      value: profile.avg_session_duration,
-    },
-  ];
+  if (!profile) return <div className="text-white p-4">Loading behavior profile...</div>;
 
   return (
-    <div className="text-white p-8">
-      <h2 className="text-2xl font-bold mb-6 text-center text-green-400">User Behavior Profile</h2>
+    <div className="p-4 text-white">
+      <h2 className="text-2xl font-bold mb-4">Behavior Profile</h2>
+      <button
+        onClick={exportAsPDF}
+        className="mb-4 px-4 py-2 bg-green-600 hover:bg-green-700 rounded"
+      >
+        Export as PDF
+      </button>
 
-      <div id="profile-content" className="bg-gray-900 rounded-lg p-6 shadow-md">
-        <p><strong>Average Login Hour:</strong> {profile.avg_login_hour}</p>
-        <p><strong>Average Files Accessed Per Day:</strong> {profile.avg_files_accessed}</p>
-        <p><strong>Average Session Duration (mins):</strong> {profile.avg_session_duration}</p>
-        <p><strong>Most Active Day:</strong> {profile.most_active_day}</p>
-        <p><strong>Most Active Region:</strong> {profile.most_active_region}</p>
-
-        <div className="mt-6">
-          <h3 className="text-lg font-semibold mb-2 text-green-300">Behavior Chart</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={barData}>
-              <XAxis dataKey="name" stroke="#ccc" />
-              <YAxis stroke="#ccc" />
+      <div id="profile-chart" className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Bar Chart for Login Hours */}
+        <div className="bg-gray-900 p-4 rounded-xl shadow">
+          <h3 className="text-lg font-semibold mb-2">Login Hour Distribution</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={profile.login_hour_distribution}>
+              <XAxis dataKey="hour" />
+              <YAxis />
               <Tooltip />
+              <Bar dataKey="count" fill="#00C49F" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Pie Chart for File Types */}
+        <div className="bg-gray-900 p-4 rounded-xl shadow">
+          <h3 className="text-lg font-semibold mb-2">File Types Accessed</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <PieChart>
+              <Pie
+                data={profile.file_types_accessed}
+                dataKey="count"
+                nameKey="type"
+                cx="50%"
+                cy="50%"
+                outerRadius={80}
+                label
+              >
+                {profile.file_types_accessed.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
               <Legend />
-              <Bar dataKey="value" fill="#82ca9d" />
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Bar Chart for Session Duration */}
+        <div className="bg-gray-900 p-4 rounded-xl shadow">
+          <h3 className="text-lg font-semibold mb-2">Average Session Duration</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={profile.session_duration}>
+              <XAxis dataKey="user" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="avg_duration" fill="#FFBB28" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Bar Chart for Day-of-Week Activity */}
+        <div className="bg-gray-900 p-4 rounded-xl shadow">
+          <h3 className="text-lg font-semibold mb-2">Day of Week Activity</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={profile.day_of_week_activity}>
+              <XAxis dataKey="day" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="count" fill="#8884d8" />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
-
-      <div className="text-center mt-6">
-        <button
-          onClick={exportToPDF}
-          className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded"
-        >
-          Export as PDF
-        </button>
-      </div>
     </div>
   );
-};
-
-export default BehaviorProfile;
+}
