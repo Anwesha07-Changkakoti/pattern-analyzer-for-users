@@ -4,7 +4,8 @@ import jsPDF from "jspdf";
 import { useEffect, useState } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { Bar, BarChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { auth } from "../firebase";
+import { auth } from "../firebase/firebaseConfig";
+
 
 const BehaviorProfile = () => {
   const [user] = useAuthState(auth);
