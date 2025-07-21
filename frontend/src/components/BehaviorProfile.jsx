@@ -35,7 +35,7 @@ export default function BehaviorProfile() {
         const token = await user.getIdToken(true);
 
         // Update profile from activity
-        await axios.post(
+        await axios.get(
           `${import.meta.env.VITE_API_BASE}/api/profile/update-from-activity`,
           {},
           { headers: { Authorization: `Bearer ${token}` } }
