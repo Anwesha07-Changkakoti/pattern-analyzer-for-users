@@ -213,17 +213,14 @@ async def track_activity(data: ActivityInput, db: Session = Depends(get_db)):
 @fastapi_app.post("/api/log")
 def log_activity(
     log: ActivityLogCreate,
+    request: Request,  # ✅ add this to extract IP address
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    # Convert timestamp string to datetime
-    log_time = log.timestamp  # ✅ CORRECT: Already a datetime object
-
-
-    # Check for recent similar log (same user, action, path)
+    log_time = log.timestamp  # already a datetime object
     recent_window = log_time - datetime.timedelta(seconds=5)
 
-
+    # Check for duplicates
     duplicate = db.query(ActivityLog).filter(
         ActivityLog.user_id == user["uid"],
         ActivityLog.action_type == log.action_type,
@@ -234,6 +231,13 @@ def log_activity(
     if duplicate:
         return {"message": "Duplicate log skipped"}
 
+    # ✅ Extract IP address
+    ip_address = request.client.host
+
+    # ✅ Determine if it's a file upload
+    is_file_upload = log.action_type in ["file_upload", "file_upload_start", "file_upload_success"]
+
+
     # Save new log
     entry = ActivityLog(
         user_id=user["uid"],
@@ -242,6 +246,8 @@ def log_activity(
         timestamp=log.timestamp,
         pathname=log.pathname,
         details=log.details,
+        ip_address=ip_address,         # ✅ set IP address
+        file_uploaded=is_file_upload,  # ✅ set upload flag
     )
     db.add(entry)
     db.commit()

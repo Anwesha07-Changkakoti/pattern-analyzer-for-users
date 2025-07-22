@@ -50,13 +50,12 @@ def generate_all_user_behavior_profiles(db: Session) -> Dict:
     logs = db.query(ActivityLog).all()
     sessions = db.query(UserSession).all()
 
-    # Dictionary: user_id -> behavior profile
     user_profiles = defaultdict(lambda: {
         "user_id": "",
         "active_weekdays": set(),
         "time_spent_per_day": defaultdict(float),
         "ip_addresses": set(),
-        "uploads_per_day": defaultdict(int)
+        "uploads_per_day": defaultdict(int),
     })
 
     for log in logs:
@@ -68,23 +67,33 @@ def generate_all_user_behavior_profiles(db: Session) -> Dict:
             weekday = log.timestamp.strftime("%A")
             profile["active_weekdays"].add(weekday)
 
-        if log.ip_address:
-            profile["ip_addresses"].add(log.ip_address)
-
-        if log.action_type == "upload" and log.timestamp:
+        if log.file_uploaded:
             day = log.timestamp.strftime("%Y-%m-%d")
             profile["uploads_per_day"][day] += 1
+
+
+        if log.ip_address:
+            profile["ip_addresses"].add(log.ip_address)
 
     for session in sessions:
         if session.start_time:
             day = session.start_time.strftime("%Y-%m-%d")
-            user_profiles[session.user_id]["time_spent_per_day"][day] += session.duration
+            user_profiles[session.user_id]["time_spent_per_day"][day] += session.duration or 0
 
-    # Convert sets to lists and defaultdicts to dicts
+    # Final cleanup: convert sets/defaultdicts to dicts/lists
+    final_profiles = []
     for user_id, profile in user_profiles.items():
-        profile["active_weekdays"] = list(profile["active_weekdays"])
-        profile["ip_addresses"] = list(profile["ip_addresses"])
-        profile["uploads_per_day"] = dict(profile["uploads_per_day"])
-        profile["time_spent_per_day"] = dict(profile["time_spent_per_day"])
+        uploads_sorted = dict(sorted(profile["uploads_per_day"].items()))
+        time_sorted = dict(sorted(profile["time_spent_per_day"].items()))
+        final_profiles.append({
+            "user_id": profile["user_id"],
+            "active_weekdays": sorted(list(profile["active_weekdays"])),
+            "ip_addresses": sorted(list(profile["ip_addresses"])),
+            "uploads_per_day": uploads_sorted,
+            "time_spent_per_day": time_sorted,
+            # Optional totals
+            "total_uploads": sum(uploads_sorted.values()),
+            "total_time_minutes": round(sum(time_sorted.values()), 2),
+        })
 
-    return list(user_profiles.values())
+    return final_profiles
