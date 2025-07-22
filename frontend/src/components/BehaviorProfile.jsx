@@ -1,154 +1,251 @@
-import { onAuthStateChanged } from "firebase/auth";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
+import axios from "axios";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import html2pdf from "html2pdf.js";
 import { useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
-  Cell,
-  Legend,
-  Pie,
-  PieChart,
+  CartesianGrid,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import { auth } from "../firebase";
-
-const COLORS = ["#00C49F", "#FFBB28", "#FF8042", "#8884d8", "#0088FE"];
+import usePageLogger from "../hooks/usePageLogger";
 
 export default function BehaviorProfile() {
+  usePageLogger();
   const [profile, setProfile] = useState(null);
-  const [user, setUser] = useState(null);
+  const [trendData, setTrendData] = useState([]);
+  const [extraStats, setExtraStats] = useState(null);
+  const [error, setError] = useState("");
 
-  // Listen to auth state
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        console.warn("User not logged in");
+        setError("User not logged in");
+        return;
+      }
+
+      try {
+        const token = await user.getIdToken(true);
+
+        // Update profile from activity
+        await axios.post(
+          `${import.meta.env.VITE_API_BASE}/api/profile/update-from-activity`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        // Fetch behavior profile
+        const profileRes = await axios.get(
+          `${import.meta.env.VITE_API_BASE}/api/profile/`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setProfile(profileRes.data);
+
+        // Fetch session trend
+        const trendRes = await axios.get(
+          `${import.meta.env.VITE_API_BASE}/api/profile/session-trend`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setTrendData(trendRes.data);
+
+        // Fetch extended stats
+        const statsRes = await axios.get(
+          `${import.meta.env.VITE_API_BASE}/api/profile/stats`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        setExtraStats({
+          ip_address: statsRes.data.ip_addresses?.[0] || "N/A",
+          total_sessions: statsRes.data.session_count,
+          uploads_today: statsRes.data.upload_count_today,
+          total_time: statsRes.data.total_duration_minutes,
+          anomaly: statsRes.data.anomalies?.length > 0,
+          anomalyList: statsRes.data.anomalies || [],
+        });
+      } catch (err) {
+        console.error("Token or request error:", err);
+        setError("Failed to fetch profile.");
+      }
     });
+
     return () => unsubscribe();
   }, []);
 
-  // Fetch behavior profile once user is available
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const token = await user.getIdToken();
-
-        // Step 1: POST to update behavior profile from activity
-        await fetch("http://localhost:8000/api/profile/update-from-activity", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        // Step 2: GET the profile data
-        const res = await fetch("http://localhost:8000/api/profile", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const data = await res.json();
-        setProfile(data);
-      } catch (error) {
-        console.error("Error loading behavior profile:", error);
-      }
-    };
-
-    if (user) {
-      fetchProfile();
-    }
-  }, [user]);
-
-  const exportAsPDF = () => {
-    const input = document.getElementById("profile-chart");
-    html2canvas(input).then((canvas) => {
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF();
-      pdf.addImage(imgData, "PNG", 10, 10, 190, 0);
-      pdf.save("behavior-profile.pdf");
-    });
+  const exportPDF = () => {
+    const element = document.getElementById("profile-section");
+    html2pdf().from(element).save("behavior-profile.pdf");
   };
 
-  if (!profile) return <div className="text-white p-4">Loading behavior profile...</div>;
+  const safe = (val, decimals = 2) =>
+    typeof val === "number" ? val.toFixed(decimals) : "N/A";
+
+  if (error)
+    return <div className="text-center text-red-500 mt-8">{error}</div>;
+
+  if (!profile)
+    return (
+      <div className="text-center text-gray-500 mt-8">Loading profile...</div>
+    );
+
+  const weekdays = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ];
+  const formattedWeekdays = (profile.weekdays_active || "")
+    .split(",")
+    .map((w) => weekdays[parseInt(w)])
+    .filter(Boolean)
+    .join(", ");
+
+  const chartData = [
+    { name: "Login Hour", value: profile.avg_login_hour },
+    { name: "Files/Day", value: profile.avg_files_accessed },
+    { name: "Session Duration (s)", value: profile.avg_session_duration },
+  ];
 
   return (
-    <div className="p-4 text-white">
-      <h2 className="text-2xl font-bold mb-4">Behavior Profile</h2>
-      <button
-        onClick={exportAsPDF}
-        className="mb-4 px-4 py-2 bg-green-600 hover:bg-green-700 rounded"
+    <div className="p-6 max-w-xl mx-auto mt-10">
+      <div
+        id="profile-section"
+        className={`rounded-2xl shadow-lg p-6 ${
+          extraStats?.anomaly
+            ? "bg-red-50 border-red-500 border-2"
+            : "bg-white"
+        }`}
       >
-        Export as PDF
-      </button>
+        <h2 className="text-2xl font-bold text-gray-800 mb-4">
+          User Behavior Profile
+        </h2>
+        <ul className="space-y-2 text-gray-700 text-base">
+          <li>
+            <strong>Avg. Login Hour:</strong>{" "}
+            {safe(profile.avg_login_hour)}
+          </li>
+          <li>
+            <strong>Files Accessed/Day:</strong>{" "}
+            {safe(profile.avg_files_accessed)}
+          </li>
+          <li
+            className={
+              profile.avg_session_duration > 600
+                ? "text-red-600 font-semibold"
+                : ""
+            }
+          >
+            <strong>Avg. Session Duration:</strong>{" "}
+            {safe(profile.avg_session_duration)}s
+          </li>
+          <li>
+            <strong>Common File Types:</strong>{" "}
+            {profile.common_file_types || "N/A"}
+          </li>
+          <li>
+            <strong>Frequent Regions:</strong>{" "}
+            {profile.frequent_regions || "N/A"}
+          </li>
+          <li>
+            <strong>Active Weekdays:</strong>{" "}
+            {formattedWeekdays || "N/A"}
+          </li>
 
-      <div id="profile-chart" className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Bar Chart for Login Hours */}
-        <div className="bg-gray-900 p-4 rounded-xl shadow">
-          <h3 className="text-lg font-semibold mb-2">Login Hour Distribution</h3>
+          {extraStats && (
+            <>
+              <li>
+                <strong>IP Address:</strong>{" "}
+                {extraStats.ip_address || "N/A"}
+              </li>
+              <li>
+                <strong>Total Sessions:</strong>{" "}
+                {extraStats.total_sessions ?? "0"}
+              </li>
+              <li>
+                <strong>Uploads Today:</strong>{" "}
+                {extraStats.uploads_today ?? 0}
+              </li>
+              <li>
+                <strong>Total Time Spent:</strong>{" "}
+                {safe(extraStats.total_time)} minutes
+              </li>
+              {extraStats.anomaly && (
+                <li>
+                  <strong className="text-red-600">Anomalies Detected:</strong>
+                  <ul className="list-disc list-inside text-red-500 ml-2 mt-1">
+                    {extraStats.anomalyList.map((item, idx) => (
+                      <li key={idx}>{item}</li>
+                    ))}
+                  </ul>
+                </li>
+              )}
+            </>
+          )}
+        </ul>
+
+        {/* Bar Chart */}
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            Behavior Overview
+          </h3>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={profile.login_hour_distribution}>
-              <XAxis dataKey="hour" />
+            <BarChart
+              data={chartData}
+              margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="count" fill="#00C49F" />
+              <Bar dataKey="value" fill="#6366f1" />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Pie Chart for File Types */}
-        <div className="bg-gray-900 p-4 rounded-xl shadow">
-          <h3 className="text-lg font-semibold mb-2">File Types Accessed</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={profile.file_types_accessed}
-                dataKey="count"
-                nameKey="type"
-                cx="50%"
-                cy="50%"
-                outerRadius={80}
-                label
+        {/* Line Chart */}
+        {Array.isArray(trendData) && trendData.length > 0 && (
+          <div className="mt-10">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+              Weekly Session Duration
+            </h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart
+                data={trendData}
+                margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
               >
-                {profile.file_types_accessed.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Legend />
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" />
+                <YAxis />
+                <Tooltip />
+                <Line
+                  type="monotone"
+                  dataKey="duration"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
 
-        {/* Bar Chart for Session Duration */}
-        <div className="bg-gray-900 p-4 rounded-xl shadow">
-          <h3 className="text-lg font-semibold mb-2">Average Session Duration</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={profile.session_duration}>
-              <XAxis dataKey="user" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="avg_duration" fill="#FFBB28" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Bar Chart for Day-of-Week Activity */}
-        <div className="bg-gray-900 p-4 rounded-xl shadow">
-          <h3 className="text-lg font-semibold mb-2">Day of Week Activity</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={profile.day_of_week_activity}>
-              <XAxis dataKey="day" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="count" fill="#8884d8" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      {/* Export Button */}
+      <div className="text-center mt-4">
+        <button
+          onClick={exportPDF}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+        >
+          Export as PDF
+        </button>
       </div>
     </div>
   );

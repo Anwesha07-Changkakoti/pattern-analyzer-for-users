@@ -5,31 +5,76 @@ export default function AllBehaviorProfiles() {
   const [profiles, setProfiles] = useState([]);
 
   useEffect(() => {
-    axios.get(`${import.meta.env.VITE_API_BASE}/api/profile/all-profiles`)
+    axios
+      .get(`${import.meta.env.VITE_API_BASE}/api/profile/all-profiles`)
       .then((res) => setProfiles(res.data))
       .catch(console.error);
   }, []);
 
   return (
-    <div className="p-4">
-      <h2 className="text-2xl font-bold mb-4">All Users' Behavioral Profiles</h2>
-      {profiles.map(profile => (
-        <div key={profile.user_id} className="border rounded-xl p-4 shadow mb-6">
-          <h3 className="text-lg font-semibold">User: {profile.user_id}</h3>
-          <p><strong>Active Weekdays:</strong> {profile.active_weekdays.join(", ")}</p>
-          <p><strong>IP Addresses:</strong> {profile.ip_addresses.join(", ")}</p>
-          <p><strong>Uploads per Day:</strong></p>
-          <ul className="ml-4">
-            {Object.entries(profile.uploads_per_day).map(([day, count]) => (
-              <li key={day}>{day}: {count} files</li>
-            ))}
-          </ul>
-          <p><strong>Time Spent per Day:</strong></p>
-          <ul className="ml-4">
-            {Object.entries(profile.time_spent_per_day).map(([day, duration]) => (
-              <li key={day}>{day}: {duration.toFixed(2)} mins</li>
-            ))}
-          </ul>
+    <div className="p-4 text-green-400 bg-black min-h-screen">
+      <h2 className="text-3xl font-bold mb-6 border-b border-green-500 pb-2">
+        All Users' Behavioral Profiles
+      </h2>
+
+      {profiles.map((profile) => (
+        <div
+          key={profile.user_id}
+          className="border border-green-600 rounded-lg p-4 mb-6 shadow-lg"
+        >
+          <h3 className="text-xl font-bold text-green-300 mb-2">
+            User: {profile.user_id}
+          </h3>
+
+          <p className="mb-1">
+            <strong className="text-green-500">Active Weekdays:</strong>{" "}
+            {profile.active_weekdays?.length > 0
+              ? profile.active_weekdays.join(", ")
+              : "N/A"}
+          </p>
+
+          <p className="mb-1">
+            <strong className="text-green-500">IP Addresses:</strong>{" "}
+            {profile.ip_addresses?.length > 0
+              ? profile.ip_addresses.join(", ")
+              : "N/A"}
+          </p>
+
+          <p className="mb-1">
+            <strong className="text-green-500">Total Uploads:</strong>{" "}
+            {profile.total_uploads ?? 0}
+          </p>
+
+          <p className="mb-3">
+            <strong className="text-green-500">Total Time Spent:</strong>{" "}
+            {profile.total_time_minutes?.toFixed(2) ?? 0} mins
+          </p>
+
+          <div className="mb-2">
+            <p className="font-semibold text-green-500">Uploads per Day:</p>
+            <ul className="ml-4 list-disc">
+              {Object.entries(profile.uploads_per_day || {}).map(
+                ([day, count]) => (
+                  <li key={day}>
+                    {day}: {count} file{count !== 1 ? "s" : ""}
+                  </li>
+                )
+              )}
+            </ul>
+          </div>
+
+          <div>
+            <p className="font-semibold text-green-500">Time Spent per Day:</p>
+            <ul className="ml-4 list-disc">
+              {Object.entries(profile.time_spent_per_day || {}).map(
+                ([day, duration]) => (
+                  <li key={day}>
+                    {day}: {duration?.toFixed(2)} mins
+                  </li>
+                )
+              )}
+            </ul>
+          </div>
         </div>
       ))}
     </div>
