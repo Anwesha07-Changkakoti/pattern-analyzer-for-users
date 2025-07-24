@@ -7,13 +7,9 @@ import logging
 import os
 import gc
 from sklearn.ensemble import IsolationForest
-from sklearn.neighbors import LocalOutlierFactor
-from sklearn.svm import OneClassSVM
 from sklearn.preprocessing import StandardScaler
 from datetime import datetime
 from typing import List, Tuple, Union
-
-import torch
 
 from app.database import SessionLocal
 from app.models import AnalysisResult
@@ -21,7 +17,6 @@ from app.services.behavior_profile import extract_behavior_features_from_activit
 from app.services.profile_updater import upsert_behavior_profile
 
 os.makedirs("logs", exist_ok=True)
-
 logging.basicConfig(
     filename="logs/anomaly_detection.log",
     level=logging.INFO,
@@ -29,27 +24,17 @@ logging.basicConfig(
 )
 
 cache: dict[str, Tuple[List[int], List[str]]] = {}
-MODEL_VERSION = "EnsembleIF_LOF_SVM_v3.0"
+MODEL_VERSION = "LightIF_v1.0"
 
-# --- Lazy loaded models ---
+# --- Lazy NLP model loading ---
 _nlp_model = None
-_bert_tokenizer = None
-_bert_model = None
 
 def get_nlp_model():
     global _nlp_model
     if _nlp_model is None:
         from sentence_transformers import SentenceTransformer
-        _nlp_model = SentenceTransformer("all-mpnet-base-v2")
+        _nlp_model = SentenceTransformer("all-MiniLM-L6-v2")  # Light model
     return _nlp_model
-
-def get_bert():
-    global _bert_tokenizer, _bert_model
-    if _bert_tokenizer is None or _bert_model is None:
-        from transformers import BertTokenizer, BertModel
-        _bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-        _bert_model = BertModel.from_pretrained("bert-base-uncased", output_attentions=True)
-    return _bert_tokenizer, _bert_model
 
 # --- Helper functions ---
 
@@ -77,27 +62,12 @@ def extract_nlp_embeddings(df: pd.DataFrame, text_cols: List[str] = None) -> pd.
         model = get_nlp_model()
         combined_text = df[text_cols].astype(str).agg(" ".join, axis=1)
         embeddings = model.encode(combined_text.tolist(), show_progress_bar=False)
+        del model
+        gc.collect()
         return pd.DataFrame(embeddings, index=df.index)
     except Exception as e:
         logging.error(f"NLP embedding failed: {e}")
         return pd.DataFrame(index=df.index)
-
-def get_attention_explanation(text: str, top_n: int = 3) -> str:
-    try:
-        tokenizer, model = get_bert()
-        inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=128)
-        outputs = model(**inputs)
-        attentions = outputs.attentions
-        last_layer_attention = attentions[-1][0]
-        avg_attention = last_layer_attention.mean(dim=0)
-        cls_attention = avg_attention[0]
-        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
-        top_tokens = sorted(zip(tokens, cls_attention.tolist()), key=lambda x: x[1], reverse=True)
-        keywords = [tok for tok, score in top_tokens if tok not in ("[CLS]", "[SEP]", "[PAD]")][:top_n]
-        return f"Semantic anomaly focus: {', '.join(keywords)}"
-    except Exception as e:
-        logging.error(f"Attention explanation failed: {e}")
-        return "NLP attention explanation failed"
 
 def prepare_features(df: pd.DataFrame, use_nlp: bool = True) -> pd.DataFrame:
     numeric_df = validate_schema(df)
@@ -113,26 +83,6 @@ def fallback_anomaly_detection(df: pd.DataFrame, z_threshold: float = 3.0) -> Li
     except Exception as e:
         logging.error(f"Fallback detection failed: {e}")
         return [0] * len(df)
-
-def ensemble_anomaly_predict(df: pd.DataFrame, contamination: float = 0.05) -> List[int]:
-    preds = []
-    iso = IsolationForest(contamination=contamination, random_state=42)
-    preds.append([1 if p == -1 else 0 for p in iso.fit_predict(df)])
-
-    try:
-        lof = LocalOutlierFactor(n_neighbors=20, contamination=contamination)
-        preds.append([1 if p == -1 else 0 for p in lof.fit_predict(df)])
-    except Exception:
-        preds.append([0] * len(df))
-
-    try:
-        svm = OneClassSVM(nu=contamination, kernel="rbf", gamma="scale")
-        svm.fit(df)
-        preds.append([1 if p == -1 else 0 for p in svm.predict(df)])
-    except Exception:
-        preds.append([0] * len(df))
-
-    return np.round(np.mean(preds, axis=0)).astype(int).tolist()
 
 def _compute_reasons(df: pd.DataFrame, preds: List[int], top_n: int = 3) -> List[str]:
     try:
@@ -186,9 +136,13 @@ def detect_anomalies(
     contamination: float = 0.1,
     return_reasons: bool = False,
     return_df: bool = False,
-    use_nlp: bool = True,
-    use_ensemble: bool = False,
+    use_nlp: bool = False,         # 🔄 Disabled by default
+    use_ensemble: bool = False,    # 🔄 Disabled by default
+    max_records: int = 5000,       # 🔐 Safety limit
 ) -> Union[List[int], Tuple[List[int], List[str]], pd.DataFrame]:
+
+    if len(df_raw) > max_records:
+        raise ValueError(f"Too many records: {len(df_raw)} (limit: {max_records})")
 
     df_raw.columns = [
         f"col_{i}" if not col or str(col).startswith("Unnamed") else str(col)
@@ -212,28 +166,18 @@ def detect_anomalies(
         else:
             adaptive_contamination = max(0.01, min(contamination, 1.0 / len(df_proc)))
             try:
-                if use_ensemble:
-                    preds = ensemble_anomaly_predict(df_proc, contamination=adaptive_contamination)
-                else:
-                    model = IsolationForest(contamination=adaptive_contamination, random_state=42)
-                    model.fit(df_proc)
-                    pred_raw = model.predict(df_proc)
-                    preds = [1 if p == -1 else 0 for p in pred_raw]
-
+                model = IsolationForest(contamination=adaptive_contamination, random_state=42)
+                model.fit(df_proc)
+                pred_raw = model.predict(df_proc)
+                preds = [1 if p == -1 else 0 for p in pred_raw]
                 reasons = _compute_reasons(df_proc, preds)
-
-                if use_nlp:
-                    text_cols = df_raw.select_dtypes(include="object").columns.tolist()
-                    if text_cols:
-                        combined_text = df_raw[text_cols].astype(str).agg(" ".join, axis=1).tolist()
-                        for idx in range(len(preds)):
-                            if preds[idx] == 1:
-                                attn_reason = get_attention_explanation(combined_text[idx])
-                                reasons[idx] += f" | {attn_reason}"
             except Exception as e:
                 logging.error(f"[{MODEL_VERSION}] Model failed: {e}")
                 preds = [0] * len(df_proc)
                 reasons = ["Model failed"] * len(preds)
+
+            if len(cache) > 100:
+                cache.clear()
             cache[df_hash] = (preds, reasons)
 
     _store_summary(
@@ -246,11 +190,8 @@ def detect_anomalies(
 
     _log_anomalies(df_proc, preds, reasons)
 
-    # 🧹 Free memory
     del df_proc
     gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
 
     if return_df:
         return df_raw.assign(anomaly=preds)
