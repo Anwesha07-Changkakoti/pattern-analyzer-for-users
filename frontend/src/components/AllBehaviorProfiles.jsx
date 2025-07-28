@@ -49,7 +49,25 @@ export default function AllBehaviorProfiles() {
             <strong className="text-green-500">Total Time Spent:</strong>{" "}
             {profile.total_time_minutes?.toFixed(2) ?? 0} mins
           </p>
-
+           <p className="mb-1">
+              <strong className="text-green-500">Anomaly Score:</strong>{" "}
+              <span
+                className={
+                  profile.anomaly_score > 0.6
+                    ? "text-red-400 font-semibold"
+                    : profile.anomaly_score > 0.3
+                    ? "text-yellow-400 font-semibold"
+                    : "text-green-400"
+                }
+              >
+                 {profile.anomaly_score?.toFixed(4) ?? "N/A"}
+                 {profile.anomaly_score > 0.6
+                    ? " (High Risk ⚠️)"
+                    : profile.anomaly_score > 0.3
+                    ? " (Moderate)"
+                    : " (Normal)"}
+                 </span>
+               </p>
           <div className="mb-2">
             <p className="font-semibold text-green-500">Uploads per Day:</p>
             <ul className="ml-4 list-disc">
