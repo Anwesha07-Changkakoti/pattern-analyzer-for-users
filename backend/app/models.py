@@ -71,6 +71,7 @@ class UserBehaviorProfile(Base):
     total_time_spent = Column(Float, default=0.0)
 
     last_updated = Column(DateTime, default=datetime.utcnow)
+    anomaly_score = Column(Float, default=0.0)
 
     user = relationship("User", back_populates="behavior_profile")
 
@@ -102,6 +103,8 @@ class ActivityLog(Base):
     device_id = Column(String, index=True)
     action_type = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
+    bytes_uploaded = Column(Integer, default=0)
+    bytes_downloaded = Column(Integer, default=0)
 
     pathname = Column(String, nullable=True)
     details = Column(String, nullable=True)
@@ -126,6 +129,8 @@ class UserActivityLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String, index=True)  # Firebase UID or email
     ip_address = Column(String)
+    bytes_uploaded = Column(Integer, default=0)
+    bytes_downloaded = Column(Integer, default=0)
     page = Column(String)
     timestamp = Column(DateTime, default=func.now())
     duration_seconds = Column(Float, default=0.0)

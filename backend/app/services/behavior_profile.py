@@ -4,7 +4,9 @@ import pytz
 from typing import List
 from app.models import ActivityLog, UserSession,UserBehaviorProfile
 from sqlalchemy.orm import Session
-
+from sklearn.ensemble import IsolationForest
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
 
 def extract_behavior_features_from_activity(
     db: Session,
@@ -77,14 +79,14 @@ def extract_behavior_profiles_for_all_users(
     logs: List[ActivityLog],
     sessions: List[UserSession]
 ) -> List[dict]:
-
     profiles = []
-    ist = pytz.timezone("Asia/Kolkata")
+    feature_vectors = []
+    user_ids = []
 
+    ist = pytz.timezone("Asia/Kolkata")
     logs_by_user = defaultdict(list)
     sessions_by_user = defaultdict(list)
 
-    # Group logs and sessions by user_id
     for log in logs:
         logs_by_user[log.user_id].append(log)
     for session in sessions:
@@ -143,6 +145,15 @@ def extract_behavior_profiles_for_all_users(
         common_ips = ",".join(ip for ip, _ in Counter(ip_addresses).most_common(3)) if ip_addresses else ""
         total_uploads = sum(uploads_by_day.values())
 
+        user_ids.append(user_id)
+        feature_vectors.append([
+            avg_login_hour,
+            avg_session_duration,
+            avg_files_accessed,
+            total_time_spent,
+            total_uploads
+        ])
+
         profiles.append({
             "user_id": user_id,
             "avg_login_hour": avg_login_hour,
@@ -155,7 +166,30 @@ def extract_behavior_profiles_for_all_users(
             "total_uploads": total_uploads,
             "file_uploads_by_day": dict(uploads_by_day),
             "time_spent_by_day": dict(time_spent_by_day),
-            "ip_addresses": common_ips if common_ips else "N/A"
+            "ip_addresses": common_ips if common_ips else "N/A",
+            "anomaly_score": None  # Will be updated later
         })
+
+    # ✅ Calculate anomaly scores
+    if len(feature_vectors) >= 2:
+        scaler = MinMaxScaler()
+        X_scaled = scaler.fit_transform(feature_vectors)
+
+        if len(feature_vectors) >= 5:
+            model = IsolationForest(contamination=0.2, random_state=42)
+            model.fit(X_scaled)
+            raw_scores = model.decision_function(X_scaled)
+            normalized_scores = [round(1 - score, 4) for score in raw_scores]
+        else:
+            # Fallback: distance from mean
+            mean_vec = np.mean(X_scaled, axis=0)
+            normalized_scores = [round(float(np.linalg.norm(vec - mean_vec)), 4) for vec in X_scaled]
+
+        # ✅ Update profiles with scores
+        for i, score in enumerate(normalized_scores):
+            profiles[i]["anomaly_score"] = score
+
+    else:
+        print("⚠️ Not enough users to compute anomaly scores (minimum 2 required).")
 
     return profiles

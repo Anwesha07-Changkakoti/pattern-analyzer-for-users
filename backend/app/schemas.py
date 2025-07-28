@@ -6,6 +6,8 @@ class ActivityLogCreate(BaseModel):
     device_id: str = Field(..., alias="deviceId")
     action_type: str
     timestamp: datetime
+    bytes_uploaded: Optional[int] = 0
+    bytes_downloaded: Optional[int] = 0
     pathname: Optional[str] = None
     details: Optional[str] = None
 
