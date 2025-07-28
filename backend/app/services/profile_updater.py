@@ -1,9 +1,10 @@
 from sqlalchemy.orm import Session
 from collections import defaultdict, Counter
+from app.services.behavior_profile import extract_behavior_profiles_for_all_users
 from app.models import UserBehaviorProfile, UserSession,ActivityLog
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
-from typing import Dict
+from typing import Dict,List
 
 
 def upsert_behavior_profile(db: Session, behavior_data: dict):
@@ -45,10 +46,13 @@ def upsert_behavior_profile(db: Session, behavior_data: dict):
         db.rollback()
         print(f"[ERROR] Failed to upsert behavior profile: {e}")
         raise
-
-def generate_all_user_behavior_profiles(db: Session) -> Dict:
+def generate_all_user_behavior_profiles(db: Session) -> List[dict]:
     logs = db.query(ActivityLog).all()
     sessions = db.query(UserSession).all()
+
+    # Get behavior-based anomaly scores
+    profiles_with_scores = extract_behavior_profiles_for_all_users(db, logs, sessions)
+    score_map = {p["user_id"]: p.get("anomaly_score", None) for p in profiles_with_scores}
 
     user_profiles = defaultdict(lambda: {
         "user_id": "",
@@ -71,7 +75,6 @@ def generate_all_user_behavior_profiles(db: Session) -> Dict:
             day = log.timestamp.strftime("%Y-%m-%d")
             profile["uploads_per_day"][day] += 1
 
-
         if log.ip_address:
             profile["ip_addresses"].add(log.ip_address)
 
@@ -91,9 +94,9 @@ def generate_all_user_behavior_profiles(db: Session) -> Dict:
             "ip_addresses": sorted(list(profile["ip_addresses"])),
             "uploads_per_day": uploads_sorted,
             "time_spent_per_day": time_sorted,
-            # Optional totals
             "total_uploads": sum(uploads_sorted.values()),
             "total_time_minutes": round(sum(time_sorted.values()), 2),
+            "anomaly_score": score_map.get(profile["user_id"], "N/A"),
         })
 
     return final_profiles
