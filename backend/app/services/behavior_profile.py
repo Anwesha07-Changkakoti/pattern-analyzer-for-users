@@ -73,6 +73,7 @@ def extract_behavior_features_from_activity(
     "weekdays_active": top_weekdays if top_weekdays else "N/A"
 }
 
+from statistics import mean, stdev
 
 def extract_behavior_profiles_for_all_users(
     db: Session,
@@ -92,6 +93,27 @@ def extract_behavior_profiles_for_all_users(
     for session in sessions:
         sessions_by_user[session.user_id].append(session)
 
+    # Track global averages for tag computation
+    all_upload_counts = []
+    all_session_durations = []
+
+    for user_id in logs_by_user:
+        uploads = []
+        for log in logs_by_user[user_id]:
+            if log.action_type == "file_upload" or log.file_uploaded:
+                uploads.append(log)
+        all_upload_counts.append(len(uploads))
+
+        durations = [s.duration for s in sessions_by_user[user_id] if s.duration]
+        if durations:
+            all_session_durations.append(mean(durations))
+
+    global_upload_mean = mean(all_upload_counts) if all_upload_counts else 0
+    global_upload_std = stdev(all_upload_counts) if len(all_upload_counts) > 1 else 0
+
+    global_session_mean = mean(all_session_durations) if all_session_durations else 0
+    global_session_std = stdev(all_session_durations) if len(all_session_durations) > 1 else 0
+
     for user_id, user_logs in logs_by_user.items():
         login_hours, weekdays, file_types, regions, ip_addresses = [], [], [], [], []
         file_access_by_day = defaultdict(int)
@@ -99,6 +121,9 @@ def extract_behavior_profiles_for_all_users(
         time_spent_by_day = defaultdict(float)
 
         user_sessions = sessions_by_user.get(user_id, [])
+        known_devices = set()
+        known_ips = set()
+        known_regions = set()
 
         for log in user_logs:
             if log.timestamp:
@@ -112,11 +137,13 @@ def extract_behavior_profiles_for_all_users(
                     uploads_by_day[localized.date()] += 1
                 if log.ip_address:
                     ip_addresses.append(log.ip_address)
+                    known_ips.add(log.ip_address)
 
             if log.file_type:
                 file_types.append(log.file_type)
             if log.region:
                 regions.append(log.region)
+                known_regions.add(log.region)
 
         for session in user_sessions:
             if session.start_time:
@@ -145,6 +172,30 @@ def extract_behavior_profiles_for_all_users(
         common_ips = ",".join(ip for ip, _ in Counter(ip_addresses).most_common(3)) if ip_addresses else ""
         total_uploads = sum(uploads_by_day.values())
 
+        # 🔍 === TAGGING SECTION ===
+        tags = []
+
+        if avg_login_hour < 8 or avg_login_hour > 20:
+            tags.append("Late Login")
+
+        if total_uploads > (global_upload_mean + 2 * global_upload_std):
+            tags.append("Unusual Upload Volume")
+
+        for ip in known_ips:
+            if ip not in common_ips:
+                tags.append("New IP Address")
+                break
+
+        for region in known_regions:
+            if region not in frequent_regions:
+                tags.append("New Region")
+                break
+
+        if avg_session_duration > (global_session_mean + global_session_std):
+            tags.append("Extended Session")
+
+        # ===========
+
         user_ids.append(user_id)
         feature_vectors.append([
             avg_login_hour,
@@ -167,6 +218,7 @@ def extract_behavior_profiles_for_all_users(
             "file_uploads_by_day": dict(uploads_by_day),
             "time_spent_by_day": dict(time_spent_by_day),
             "ip_addresses": common_ips if common_ips else "N/A",
+            "tags": tags,
             "anomaly_score": None  # Will be updated later
         })
 
@@ -185,7 +237,6 @@ def extract_behavior_profiles_for_all_users(
             mean_vec = np.mean(X_scaled, axis=0)
             normalized_scores = [round(float(np.linalg.norm(vec - mean_vec)), 4) for vec in X_scaled]
 
-        # ✅ Update profiles with scores
         for i, score in enumerate(normalized_scores):
             profiles[i]["anomaly_score"] = score
 
