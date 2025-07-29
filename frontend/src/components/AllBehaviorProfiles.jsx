@@ -68,6 +68,19 @@ export default function AllBehaviorProfiles() {
                     : " (Normal)"}
                  </span>
                </p>
+               {profile.tags && profile.tags.length > 0 && (
+                 <div className="mb-3 mt-2 flex flex-wrap gap-2">
+                   {profile.tags.map((tag, idx) => (
+                    <span
+                      key={idx}
+                      className="bg-yellow-800 text-yellow-300 text-xs font-medium px-2 py-1 rounded-full"
+                      >
+                       {tag}
+                     </span>
+                   ))}
+              </div>
+            )}
+
           <div className="mb-2">
             <p className="font-semibold text-green-500">Uploads per Day:</p>
             <ul className="ml-4 list-disc">
