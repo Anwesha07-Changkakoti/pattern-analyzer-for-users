@@ -11,6 +11,7 @@ import datetime
 from typing import List, Dict
 
 
+
 profile_router = APIRouter(prefix="/api/profile", tags=["Behavior"])
 
 @profile_router.post("/update-from-activity")
@@ -181,5 +182,7 @@ def get_daily_usage(user_id: str, db: Session):
     ]
 @profile_router.get("/all-profiles", response_model=List[Dict])
 def get_all_user_behavior_profiles(db: Session = Depends(get_db)):
-    from app.services.profile_updater import generate_all_user_behavior_profiles
-    return generate_all_user_behavior_profiles(db)
+    logs = db.query(ActivityLog).all()
+    sessions = db.query(UserSession).all()
+    profiles = extract_behavior_profiles_for_all_users(db, logs, sessions)
+    return profiles

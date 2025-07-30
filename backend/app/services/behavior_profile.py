@@ -178,8 +178,10 @@ def extract_behavior_profiles_for_all_users(
         if avg_login_hour < 8 or avg_login_hour > 20:
             tags.append("Late Login")
 
-        if total_uploads > (global_upload_mean + 2 * global_upload_std):
+        if global_upload_std > 0 and total_uploads > (global_upload_mean + global_upload_std):
             tags.append("Unusual Upload Volume")
+        elif total_uploads > 10:
+           tags.append("High Upload Activity")
 
         for ip in known_ips:
             if ip not in common_ips:
@@ -191,8 +193,10 @@ def extract_behavior_profiles_for_all_users(
                 tags.append("New Region")
                 break
 
-        if avg_session_duration > (global_session_mean + global_session_std):
-            tags.append("Extended Session")
+        if global_session_std > 0 and avg_session_duration > (global_session_mean + 0.5 * global_session_std):
+          tags.append("Extended Session")
+        elif avg_session_duration > 1.0:
+             tags.append("Long Sessions")
 
         # ===========
 

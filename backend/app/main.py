@@ -393,7 +393,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     if log.id not in last_sent_ids:
                         await websocket.send_json({
                             "id": log.id,
-                            "timestamp": log.timestamp.isoformat(),
+                            "timestamp": log.timestamp.strftime("%Y-%m-%dT%H:%M:%SZ"),
                             "device_id": log.device_id,
                             "action_type": log.action_type,
                             "pathname": log.pathname,
