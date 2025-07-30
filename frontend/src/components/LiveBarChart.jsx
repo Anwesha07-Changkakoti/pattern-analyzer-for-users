@@ -16,13 +16,15 @@ export default function LiveBarChart({ dataStream }) {
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
-      const recentLogs = dataStream.filter(log => {
-        const logTime = new Date(log.timestamp);
-        return now - logTime < 10000; // last 10 seconds
+
+      // Filter logs from the last 10 seconds
+      const recentLogs = dataStream.filter((log) => {
+        const ts = new Date(log.timestamp);
+        return now - ts < 10000;
       });
 
+      // Group by second
       const grouped = {};
-
       recentLogs.forEach((log) => {
         const time = new Date(log.timestamp).toLocaleTimeString();
         grouped[time] = (grouped[time] || 0) + 1;
@@ -33,17 +35,17 @@ export default function LiveBarChart({ dataStream }) {
         count,
       }));
 
-      // Pad with missing timestamps (fill gaps)
+      // Ensure chart always has 10 seconds of data
       const timeNow = new Date();
       const filled = [];
       for (let i = 9; i >= 0; i--) {
         const t = new Date(timeNow.getTime() - i * 1000).toLocaleTimeString();
-        const existing = updated.find(u => u.time === t);
+        const existing = updated.find((u) => u.time === t);
         filled.push({ time: t, count: existing ? existing.count : 0 });
       }
 
       setChartData(filled);
-    }, 1000); // update every second
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [dataStream]);
@@ -58,6 +60,14 @@ export default function LiveBarChart({ dataStream }) {
     });
   };
 
+  // ✅ Normalize anomaly field handling
+  const anomalyCount = dataStream
+    .slice(-10)
+    .filter((log) => Number(log.anomaly ?? log.Anomaly ?? 0) === 1).length;
+
+  // Optional debug:
+  // console.log("Live chart data:", chartData);
+
   return (
     <div className="border border-cybergreen rounded p-4 mt-8" id="live-chart">
       <div className="flex justify-between items-center mb-2">
@@ -70,12 +80,7 @@ export default function LiveBarChart({ dataStream }) {
         </button>
       </div>
       <p className="text-cybergreen font-mono text-sm mb-1">
-        Anomalies (last 10):{" "}
-        {
-          dataStream
-            .slice(-10)
-            .filter((log) => log.anomaly === 1).length
-        }
+        Anomalies (last 10): {anomalyCount}
       </p>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={chartData}>
@@ -89,3 +94,4 @@ export default function LiveBarChart({ dataStream }) {
     </div>
   );
 }
+
