@@ -21,6 +21,7 @@ const tagColorMap = {
 export default function AllBehaviorProfiles() {
   const [profiles, setProfiles] = useState([]);
   const [expandedUsers, setExpandedUsers] = useState({});
+  const [jointScores, setJointScores] = useState({}); // ✅ move here
 
   useEffect(() => {
     axios
@@ -29,12 +30,29 @@ export default function AllBehaviorProfiles() {
       .catch(console.error);
   }, []);
 
-  const toggleExpand = (userId) => {
+  const toggleExpand = async (userId) => {
     setExpandedUsers((prev) => ({
       ...prev,
       [userId]: !prev[userId],
     }));
+
+    if (!jointScores[userId]) {
+      try {
+        const res = await axios.get(
+          `${import.meta.env.VITE_API_BASE}/api/joint_score/${userId}`
+        );
+        setJointScores((prev) => ({
+          ...prev,
+          [userId]: res.data.joint_anomaly_score,
+        }));
+      } catch (err) {
+        console.error("Error fetching joint score for", userId, err);
+      }
+    }
   };
+
+  // ...rest of your component remains unchanged...
+
 
   const sortedProfiles = [...profiles].sort(
     (a, b) => b.anomaly_score - a.anomaly_score
@@ -138,6 +156,31 @@ export default function AllBehaviorProfiles() {
                       : " (Normal)"}
                   </span>
                 </p>
+
+                <p>
+  <strong className="text-green-500">Joint Risk Score:</strong>{" "}
+  {jointScores[profile.user_id] !== undefined ? (
+    <span
+      className={`${
+        jointScores[profile.user_id] > 0.7
+          ? "text-red-400 font-semibold"
+          : jointScores[profile.user_id] > 0.4
+          ? "text-yellow-400 font-semibold"
+          : "text-green-400"
+      }`}
+    >
+      {jointScores[profile.user_id].toFixed(4)}{" "}
+      {jointScores[profile.user_id] > 0.7
+        ? "(⚠ High Correlation)"
+        : jointScores[profile.user_id] > 0.4
+        ? "(Moderate)"
+        : "(Normal)"}
+    </span>
+  ) : (
+    <span className="text-gray-400">Loading...</span>
+  )}
+</p>
+
               </div>
 
               {profile.tags && profile.tags.length > 0 && (
