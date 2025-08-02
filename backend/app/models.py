@@ -69,6 +69,7 @@ class UserBehaviorProfile(Base):
 
     total_sessions = Column(Integer, default=0)
     total_time_spent = Column(Float, default=0.0)
+    total_uploads = Column(Integer, default=0)
 
     last_updated = Column(DateTime, default=datetime.utcnow)
     anomaly_score = Column(Float, default=0.0)
@@ -135,3 +136,24 @@ class UserActivityLog(Base):
     timestamp = Column(DateTime, default=func.now())
     duration_seconds = Column(Float, default=0.0)
     file_uploaded = Column(Boolean, default=False)
+
+class UserNetworkStats(Base):
+    __tablename__ = "user_network_stats"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True)
+    ip_address = Column(String)
+    location = Column(String)
+    device_type = Column(String)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+class UserJointAnomaly(Base):
+    __tablename__ = "user_joint_anomaly"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    behavior_score = Column(Float)
+    network_score = Column(Float)
+    joint_score = Column(Float)
+    is_anomaly = Column(Boolean, default=False)

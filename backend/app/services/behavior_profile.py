@@ -248,3 +248,33 @@ def extract_behavior_profiles_for_all_users(
         print("⚠️ Not enough users to compute anomaly scores (minimum 2 required).")
 
     return profiles
+
+def save_profiles_to_db(db: Session, profiles: list[dict]):
+    for p in profiles:
+        existing = db.query(UserBehaviorProfile).filter_by(user_id=p["user_id"]).first()
+        if existing:
+            # Update fields
+            existing.avg_login_hour = p["avg_login_hour"]
+            existing.avg_files_accessed = p["avg_files_accessed"]
+            existing.common_file_types = p["common_file_types"]
+            existing.avg_session_duration = p["avg_session_duration"]
+            existing.frequent_regions = p["frequent_regions"]
+            existing.weekdays_active = p["weekdays_active"]
+            existing.total_sessions = len(p.get("file_uploads_by_day", {}))
+            existing.total_time_spent = p["total_time_spent"]
+            existing.anomaly_score = p["anomaly_score"]
+        else:
+            new_profile = UserBehaviorProfile(
+                user_id=p["user_id"],
+                avg_login_hour=p["avg_login_hour"],
+                avg_files_accessed=p["avg_files_accessed"],
+                common_file_types=p["common_file_types"],
+                avg_session_duration=p["avg_session_duration"],
+                frequent_regions=p["frequent_regions"],
+                weekdays_active=p["weekdays_active"],
+                total_sessions=len(p.get("file_uploads_by_day", {})),
+                total_time_spent=p["total_time_spent"],
+                anomaly_score=p["anomaly_score"]
+            )
+            db.add(new_profile)
+    db.commit()

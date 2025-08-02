@@ -131,12 +131,13 @@ fastapi_app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+from app.routes import joint_routes
 
 # Include Routers
 fastapi_app.include_router(results_router)
 fastapi_app.include_router(session_router)
 fastapi_app.include_router(profile_router)
-
+fastapi_app.include_router(joint_routes.router)
 
 # Logging
 logger = logging.getLogger("user-pattern-analyzer")
