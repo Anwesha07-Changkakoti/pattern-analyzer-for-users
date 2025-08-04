@@ -41,16 +41,27 @@ def get_combined_features(db: Session, user_id: str):
 
 def train_joint_anomaly_model(db: Session):
     users = db.query(UserBehaviorProfile).all()
-    X = [get_combined_features(db, u.user_id) for u in users if get_combined_features(db, u.user_id)]
+    print(f"🧠 Found {len(users)} behavior profiles.")
+
+    X = []
+    for u in users:
+        vec = get_combined_features(db, u.user_id)
+        if vec:
+            print(f"✅ Using user {u.user_id}: {vec}")
+            X.append(vec)
+        else:
+            print(f"⚠️ Skipping user {u.user_id}: Missing data.")
+
     if not X:
-        raise ValueError("❌ No valid data to train on.")
-    
+        raise ValueError("❌ No valid data to train on. Add behavior + network stats for at least one user.")
+
     model = IsolationForest(contamination=0.1)
     model.fit(X)
-    
+
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
     joblib.dump(model, MODEL_PATH)
     print(f"✅ Trained and saved model on {len(X)} users.")
+
 
 def load_joint_model():
     if not os.path.exists(MODEL_PATH):
