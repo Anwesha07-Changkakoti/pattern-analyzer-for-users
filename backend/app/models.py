@@ -141,11 +141,13 @@ class UserNetworkStats(Base):
     __tablename__ = "user_network_stats"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, index=True)
-    ip_address = Column(String)
-    location = Column(String)
-    device_type = Column(String)
+    user_id = Column(String, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow)
+    request_bytes = Column(Integer)
+    response_bytes = Column(Integer)
+    total_bandwidth_mb = Column(Float, default=0.0, nullable=False)
+    avg_packet_size = Column(Float, default=0.0, nullable=False)  # ✅ FIXED
+    dns_lookups = Column(Integer, default=0)
 
 class UserJointAnomaly(Base):
     __tablename__ = "user_joint_anomaly"

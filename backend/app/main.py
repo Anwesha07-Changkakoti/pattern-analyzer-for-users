@@ -83,6 +83,10 @@ async def preflight_handler(full_path: str, request: Request):
     response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
+from app.middleware.network_logger import PerUserRequestSizeMiddleware
+
+fastapi_app.add_middleware(PerUserRequestSizeMiddleware)
+
 
 @fastapi_app.middleware("http")
 async def log_request_data(request: Request, call_next):
@@ -117,7 +121,26 @@ async def log_request_data(request: Request, call_next):
     except Exception as e:
         print("🔴 Logging to UserActivityLog failed:", e)
 
+    # ✅ Automatically upsert user behavior profile after logging
+    try:
+        from app.models import ActivityLog, UserSession, UserBehaviorProfile
+        from app.services.behavior_profile import extract_behavior_features_from_activity
+        from app.services.profile_updater import upsert_behavior_profile
+
+        db = next(get_db())
+        existing = db.query(UserBehaviorProfile).filter_by(user_id=user_id).first()
+        if not existing:
+            logs = db.query(ActivityLog).filter_by(user_id=user_id).all()
+            sessions = db.query(UserSession).filter_by(user_id=user_id).all()
+
+            if logs and sessions:
+                features = extract_behavior_features_from_activity(db, logs, sessions, user_id)
+                upsert_behavior_profile(db, features)
+    except Exception as e:
+        print("⚠️ Failed to auto-upsert behavior profile:", e)
+
     return response
+
 
 
 # Middleware

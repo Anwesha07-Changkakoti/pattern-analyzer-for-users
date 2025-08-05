@@ -21,16 +21,21 @@ def get_recent_network_features(db: Session, user_id: str, window_mins: int = 10
         return [0, 0, 0]
 
     total_dns = sum(s.dns_lookups for s in stats)
-    total_bandwidth = sum(s.total_bandwidth_mb for s in stats)
+    total_bandwidth = sum((s.total_bandwidth_mb if s.total_bandwidth_mb is not None else 0) for s in stats)
     avg_packet_size = sum(s.avg_packet_size for s in stats) / len(stats)
 
     return [total_dns, total_bandwidth, avg_packet_size]
-
 def get_combined_features(db: Session, user_id: str):
     b = db.query(UserBehaviorProfile).filter_by(user_id=user_id).first()
     if not b:
+        print(f"❌ No behavior profile for user {user_id}")
         return None
+
     net = get_recent_network_features(db, user_id)
+    if net is None:  # ✅ Only reject if no network data at all
+        print(f"❌ No recent network stats for user {user_id}")
+        return None
+
     return [
         b.avg_login_hour or 0,
         b.total_time_spent or 0,
@@ -38,6 +43,7 @@ def get_combined_features(db: Session, user_id: str):
         b.total_uploads or 0,
         *net
     ]
+
 
 def train_joint_anomaly_model(db: Session):
     users = db.query(UserBehaviorProfile).all()
